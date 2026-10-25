@@ -1,0 +1,139 @@
+// Server config for the NS server image. To customize it:
+//
+//   1. Copy this file to hosting/server.cfg. hosting/build.sh does this for you
+//      on its first run. server.cfg is gitignored, so your changes stay local.
+//   2. Edit hosting/server.cfg.
+//   3. Rebuild and restart:  hosting/build.sh && cd hosting && podman compose up -d
+//
+// It replaces ns/server.cfg from dist/server/ns in the image. The server runs it
+// on every map change (see mapchangecfgfile below).
+//
+// Don't put rcon_password or sv_password here. Set RCON_PASSWORD and
+// SV_PASSWORD in hosting/.env, so they never end up in the image.
+//
+// Custom maps download slowly from HLDS itself. For fast downloads, host the
+// files over HTTP and add:  sv_downloadurl "http://example.com/ns/"
+//
+// Everything below is the stock server.cfg from dist/ns.
+
+// Use this file to configure your DEDICATED server. 
+// This config file is executed everytime the server changes levels (disable by removing mapchangecfgfile at end)
+//
+// Please visit the server ops forum on www.natural-selection.org, or check out the manual if you have any questions about any of these settings.
+//
+
+////////////////////////////////////////////////////
+// Common between listenserver.cfg and server.cfg //
+////////////////////////////////////////////////////
+
+// Default server name. Change to "Bob's Server", etc.
+hostname "Natural Selection v3.3"
+
+// Must specify sv_region, or it won't show up in Steam server browser
+// 0: US East coast
+// 1: US West coast
+// 2: South America
+// 3: Europe
+// 4: Asia
+// 5: Australia
+// 6: Middle East
+// 7: Africa
+sv_region 0
+
+// general gameplay
+mp_autoconcede 4
+mp_limitteams 1
+mp_combattime 15
+
+// block abusive console scripts (wait, special, etc.)?
+mp_blockscripts 0
+
+// Set to -1 to disallow voting (looks in mapcycle.txt for entries)
+mp_mapvoteratio .6
+
+// Enable HLTV proxies to connect
+sv_proxies 1
+
+// maximum client movement speed (needed for commander mode)
+sv_maxspeed 4000
+sv_allowdownload 1
+
+// Enforce file consistency 0 = none, 1 = game version, 2 = additional files for competitive play (previously 1)
+mp_consistency 1
+
+// Commander voting
+mp_votedowntime 180
+mp_votecasttime 2
+mp_votepercentneeded .4
+mp_minvotesneeded 3
+
+// More obscure settings
+mp_countdowntime .2
+mp_latejointime 1.5
+mp_logdetail 0
+mp_falldamage 1
+mp_killdelay 3
+mp_flashlight 1
+mp_footsteps 1
+
+// AI Player Settings
+mp_botsenabled 0
+mp_botminplayers 0
+mp_botusemapdefaults 1
+mp_botskill 1
+mp_botautomode 1
+mp_botcommandermode 1
+
+// disable autoaim and mad gibs
+sv_aim 0
+violence_hgibs 0
+violence_agibs 0
+
+// player bounding boxes (collisions, not clipping)
+sv_clienttrace 3.5
+
+/////////////////////////////////////////
+// Server options (in listenserver UI) //
+/////////////////////////////////////////
+mp_tournamentmode 0
+mp_friendlyfire 0
+sv_cheats 0
+mp_drawdamage 0
+
+// Handicap one side (0-100)
+mp_team1damagepercent 100
+mp_team2damagepercent 100
+
+// 60 minute timelimit (never ends match in progress)
+mp_timelimit 60
+
+///////////////////////////////
+// Dedicated server specific //
+///////////////////////////////
+sv_lan 0
+
+// Forces a limit on structures on the server
+sv_structurelimit 300
+
+// disable clients' ability to pause the server
+pausable 0
+
+// List server op WON or Steam ids here, delimited by semi-colons (eg, "STEAM_0:1:12345;STEAM_0:0:56736"), to display server op icon next to these players on this server.
+mp_serverops ""
+
+// Allows display of special authentication icons next to people's names (including developers, Constellation members, etc.)
+mp_uplink 1
+
+// Needed so this file is executed on map change, like pre-NS v2.1
+mapchangecfgfile server.cfg
+
+// Post HL 25th Aniversary update
+sv_rollangle 0
+sv_allow_shaders 0
+
+// Set rate limits, otherwise they initialize to bad values
+sv_maxupdaterate 102
+sv_maxunlag 0.3
+sv_maxrate 0
+sv_minrate 20000
+sv_minupdaterate 30

@@ -1,0 +1,52 @@
+# NS server stack. Build the image first with hosting/build.sh, then:
+#
+#   cd hosting && podman compose up -d      (or docker compose)
+#
+# Settings: .env.default, overridden by an optional .env (see .env.default).
+
+name: ns-classic
+
+x-server: &server
+  image: localhost/ns-classic-server:latest
+  pull_policy: never
+  restart: unless-stopped
+  env_file:
+    - path: .env.default
+    - path: .env
+      required: false
+
+services:
+  hlds:
+    <<: *server
+    command: hlds
+    # Keep a console to attach to
+    tty: true
+    stdin_open: true
+    ports:
+      - "${HLDS_PORT:-27016}:${HLDS_PORT:-27016}/udp"
+      - "26900:26900/udp"
+    volumes:
+      - logs:/home/steam/hlds/ns/logs
+
+  hltv:
+    <<: *server
+    command: hltv
+    tty: true
+    stdin_open: true
+    depends_on:
+      - hlds
+    ports:
+      - "${HLTV_PORT:-27020}:${HLTV_PORT:-27020}/udp"
+    volumes:
+      - demos:/home/steam/hlds/ns/demos
+
+  rotate:
+    <<: *server
+    command: rotate
+    volumes:
+      - logs:/home/steam/hlds/ns/logs
+      - demos:/home/steam/hlds/ns/demos
+
+volumes:
+  logs:
+  demos:

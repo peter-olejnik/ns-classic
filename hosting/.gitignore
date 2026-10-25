@@ -1,0 +1,8 @@
+# Local settings and secrets (see .env.default)
+.env
+# Your own configs, created from the *.example files by build.sh
+server.cfg
+motd.txt
+# Any other files to copy over ns/ in the image
+overlay/*
+!overlay/.placeholder

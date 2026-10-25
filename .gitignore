@@ -1,0 +1,9 @@
+# NS source checkout (cloned from ENSL/NS by builder/build.sh)
+src/
+
+# Build output exported by builder/Dockerfile
+dist/
+
+# Extra maps and resources to include in mapmerge
+ns_maps/
+mapmerge/__pycache__/

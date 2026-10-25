@@ -1,0 +1,9 @@
+# Build context for hosting/Dockerfile is hosting/; the mod directory comes
+# from the "ns" named build context. Never send env files (secrets).
+.env*
+*.md
+*.example
+build.sh
+push-content.sh
+compose.yaml
+overlay/.placeholder

@@ -1,0 +1,9 @@
+# Patches are applied to LF-normalized source inside the build container;
+# keep them byte-exact (LF, trailing whitespace in context lines).
+builder/patches/*.patch -text
+
+# Scripts run inside Linux containers
+*.sh text eol=lf
+
+# Bot navmeshes (content/navmeshes) are binary
+*.nav binary

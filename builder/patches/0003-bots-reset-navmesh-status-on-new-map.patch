@@ -1,0 +1,32 @@
+Load the navmesh on a new map even after a map without one.
+
+When a map has no navmesh, loadNavigationData() sets the status to
+NAVMESH_STATUS_FAILED, and AIMGR_IsBotEnabled() is false while it is.
+AIMGR_NewMap() returned early on that same check, before the unload that
+resets the status to pending, so the failure carried over: after one map
+without a navmesh, bots never joined again until mp_botsenabled was
+toggled or the server restarted. Check the cvar instead, and always
+unload (it frees only what is loaded).
+
+--- a/main/source/mod/AvHAIPlayerManager.cpp
++++ b/main/source/mod/AvHAIPlayerManager.cpp
+@@ -1018,12 +1018,14 @@
+ {
+ 	AIMGR_BotPrecache();
+ 
+-	if (!AIMGR_IsBotEnabled()) { return; } // Do nothing if we're not using bots. Data will be already cleared if bot is disabled via AIMGR_OnBotDisabled()
++	// Not AIMGR_IsBotEnabled(): it is also false while the navmesh status is
++	// NAVMESH_STATUS_FAILED, so one map without a navmesh would keep the bots
++	// off on every later map.
++	if (avh_botsenabled.value <= 0) { return; } // Do nothing if we're not using bots. Data will be already cleared if bot is disabled via AIMGR_OnBotDisabled()
+ 
+-	if (NavmeshLoaded())
+-	{
+-		UnloadNavigationData();
+-	}
++	// Unconditionally: this also resets the navmesh status to pending, so the
++	// new map's navmesh is loaded even after a failed load on the previous map
++	UnloadNavigationData();
+ 
+ 	AITAC_ClearMapAIData(true);
+ 

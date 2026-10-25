@@ -1,0 +1,28 @@
+# Build context for builder/Dockerfile is the repo root; it only needs src/main
+# and builder/patches. Read by both Docker and Podman/Buildah.
+.git
+dist
+hosting
+ns_maps
+mapmerge
+content
+builder/*
+!builder/patches
+src/.git
+src/hd
+*.md
+
+# Visual Studio caches/databases (100+ MB, not needed on Linux)
+**/*.ncb
+**/*.sdf
+**/*.suo
+**/*.VC.db
+**/*.pdb
+**/ipch
+
+# Stale build outputs, if any
+src/main/source/linux/release
+src/main/source/linux/debug
+src/main/source/linux/libparticleMP.a
+src/main/source/particles/*.o
+src/main/source/particles/libparticleMP.a

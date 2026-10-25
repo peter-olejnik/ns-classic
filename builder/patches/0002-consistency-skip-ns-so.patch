@@ -1,0 +1,23 @@
+Don't check dlls/ns.so in the file consistency check.
+
+With mp_consistency 1 the server compares precached files with each
+player's copy. Players have the release ns.so; this server runs its own
+build of the same source, which can't match byte for byte, so every player
+was kicked with "Bad file (dlls/ns.so) Your NS version differs from the
+server's". Clients never load ns.so. cl_dlls/client.{dll,so} and
+dlls/ns.dll (release copies, see builder/Dockerfile) are still checked.
+
+--- a/main/source/dlls/client.cpp
++++ b/main/source/dlls/client.cpp
+@@ -1209,7 +1209,10 @@
+ 	// Waste of memory, but files must be precached for the hash check to work.
+ 	PRECACHE_UNMODIFIED_GENERIC("dlls/ns.dll");
+ 	PRECACHE_UNMODIFIED_GENERIC("cl_dlls/client.dll");
+-	PRECACHE_UNMODIFIED_GENERIC("dlls/ns.so");
++	// Not checked: the server binary is built from source by ns-classic and
++	// can't match the release ns.so byte for byte. Clients never load it; the
++	// client libraries still enforce the release version.
++	//PRECACHE_UNMODIFIED_GENERIC("dlls/ns.so");
+ 	PRECACHE_UNMODIFIED_GENERIC("cl_dlls/client.so");
+ 	//PRECACHE_UNMODIFIED_GENERIC("gl_shaders/fs_world.frag");
+ 	//PRECACHE_UNMODIFIED_GENERIC("gl_shaders/vs_world.vert");

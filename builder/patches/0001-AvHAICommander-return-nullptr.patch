@@ -1,0 +1,16 @@
+Return nullptr instead of false from a pointer-returning function.
+
+AICOMM_DeployStructure returns AvHAIBuildableStructure*. Converting `false`
+to a pointer is ill-formed since C++11 and rejected by GCC >= 7.
+
+--- a/main/source/mod/AvHAICommander.cpp
++++ b/main/source/mod/AvHAICommander.cpp
+@@ -23,7 +23,7 @@
+ 	// Don't allow the commander to place a structure somewhere unreachable to marines
+ 	if (!UTIL_PointIsReachable(WelderProfile, AITAC_GetTeamStartingLocation(pBot->Player->GetTeam()), Location, max_player_use_reach)) 
+ 	{
+-		return false;
++		return nullptr;
+ 	}
+ 
+ 	AvHMessageID StructureID = UTIL_StructureTypeToImpulseCommand(StructureToDeploy);

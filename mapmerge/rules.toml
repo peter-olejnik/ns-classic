@@ -1,0 +1,65 @@
+# Rules for mapmerge/merge.sh: which maps found in ns_maps are merged (with the
+# files they need) into the server's ns directory. Edit and re-run merge.sh; only the merge
+# step re-runs, the analysis is cached.
+#
+# Map names are case-insensitive. Paths are destination paths inside the ns
+# mod directory, as shown in dist/mapmerge/report.md (e.g. "maps/ns_foo.bsp",
+# "ns_foo.wad").
+
+[maps]
+# Skip maps whose .bsp is truncated or corrupt.
+skip_broken = true
+# Skip maps missing a model/sprite that HLDS must precache (the map won't load).
+skip_critical_missing = true
+# Skip maps using textures not found in any WAD (the map loads, but renders
+# missing textures).
+skip_missing_textures = false
+# Never merge these maps.
+exclude = []
+# Always merge these maps, even if a rule above would skip them.
+include = []
+
+[conflicts]
+# Several different files for the same destination path: keep the "largest"
+# or the "smallest".
+strategy = "largest"
+
+# Per-path override: destination path -> text contained in the source to use
+# (the archive or folder shown in the report's conflict list).
+[conflicts.prefer]
+# "ns_rust.wad" = "ns_rust_1.3.zip"
+
+[dist]
+# Replace files that already exist in dist/ns with a different version.
+overwrite = false
+
+[files]
+# ns_maps is a loose dump: only the merged maps' own files and the files they
+# need are merged. Also merge files shipped in the same archive as a merged map
+# (custom assets the map may use without referencing them directly).
+include_archive_siblings = true
+# Destination paths never to merge (glob patterns, case-insensitive).
+exclude = []
+
+# Force-merge files that have no known destination: source file name ->
+# destination path. Files needed by a map never need this; they are matched
+# by name automatically.
+[files.place]
+# "ns_beemersiege_v1_b2_str.cfg" = "ns_beemersiege_v1_b2_str.cfg"
+
+# Mapcycle files written to the mod directory (dist/server/ns), selected on
+# the server with +mapcyclefile <file>:
+#   mapcycle.all.txt       every map, all versions
+#   mapcycle.siege.txt     "siege" in the name          | one version per map:
+#   mapcycle.co.txt        co_ maps, no siege maps      | the release if there
+#   mapcycle.ns.txt        ns_ maps, no siege maps      | is one, else the
+#                                                       | newest beta
+#   mapcycle.original.txt  the stock NS mapcycle
+# merge-report.md lists which versions were left out.
+[mapcycle]
+minplayers = 0
+maxplayers = 32
+# Maps never to list in any mapcycle except the original (glob patterns).
+exclude = []
+# Maps to list in the filtered mapcycles even if a newer version exists.
+include = []
