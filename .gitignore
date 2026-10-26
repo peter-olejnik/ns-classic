@@ -7,3 +7,6 @@ dist/
 # Extra maps and resources to include in mapmerge
 ns_maps/
 mapmerge/__pycache__/
+
+# Left by `podman machine ssh` from Git Bash (a known_hosts line)
+NUL

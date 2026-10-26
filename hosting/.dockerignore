@@ -7,3 +7,6 @@ build.sh
 push-content.sh
 compose.yaml
 overlay/.placeholder
+
+# Left by `podman machine ssh` from Git Bash; Windows reads it as the null device
+NUL

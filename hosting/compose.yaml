@@ -27,6 +27,8 @@ services:
       - "26900:26900/udp"
     volumes:
       - logs:/home/steam/hlds/ns/logs
+      # Core dumps, if the host's core_pattern points here (see README)
+      - cores:/home/steam/hlds/cores
 
   hltv:
     <<: *server
@@ -39,6 +41,7 @@ services:
       - "${HLTV_PORT:-27020}:${HLTV_PORT:-27020}/udp"
     volumes:
       - demos:/home/steam/hlds/ns/demos
+      - cores:/home/steam/hlds/cores
 
   rotate:
     <<: *server
@@ -50,3 +53,4 @@ services:
 volumes:
   logs:
   demos:
+  cores:

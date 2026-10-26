@@ -1,0 +1,23 @@
+Don't read through null when no detail edge is found.
+
+closestPointOnDetailEdges() starts pmin/pmax at null and sets them only for
+an edge closer than FLT_MAX. When no edge qualifies (a NaN position makes
+every comparison false, or the poly has no usable detail edges), it still
+called dtVlerp() on them, and the server segfaulted in
+dtNavMesh::closestPointOnPoly during a bots round on ns_cerbsiege_b13.
+Leave closest unchanged instead.
+
+--- a/main/source/detour/DetourNavMesh.cpp
++++ b/main/source/detour/DetourNavMesh.cpp
+@@ -895,6 +895,11 @@
+ 			}
+ 		}
+ 
++		// No edge was found (pos is NaN, or the poly has no usable detail
++		// edges): leave closest as it is instead of reading through null.
++		if (!pmin)
++			return;
++
+ 		dtVlerp(closest, pmin, pmax, tmin);
+ 	}
+ }

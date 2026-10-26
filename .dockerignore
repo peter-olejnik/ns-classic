@@ -26,3 +26,6 @@ src/main/source/linux/debug
 src/main/source/linux/libparticleMP.a
 src/main/source/particles/*.o
 src/main/source/particles/libparticleMP.a
+
+# Left by `podman machine ssh` from Git Bash; Windows reads it as the null device
+NUL

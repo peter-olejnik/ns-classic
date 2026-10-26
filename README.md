@@ -141,7 +141,7 @@ NS's own copy of the editor was built from an unpublished version of that code, 
 | `hltv`   | Spectator and demo proxy. It connects to `hlds` and records demos. A small preload library fixes a Valve bug that crashed HLTV whenever it started a demo (`hosting/hltvfix/`). | 27020/udp |
 | `rotate` | Compresses logs (LZ4) and demos (zip) once they've been idle for 30 minutes | – |
 
-All three use the same image; the container command picks the role (`hosting/scripts/entry.sh`). Logs and demos are stored in the named volumes `ns-classic_logs` and `ns-classic_demos`, which avoids permission problems with rootless Podman.
+All three use the same image; the container command picks the role (`hosting/scripts/entry.sh`). Logs, demos and core dumps are stored in the named volumes `ns-classic_logs`, `ns-classic_demos` and `ns-classic_cores`, which avoids permission problems with rootless Podman.
 
 ```sh
 podman compose logs -f hlds                 # server output
@@ -163,6 +163,14 @@ wsl -d podman-machine-default -- ip -4 -o addr show eth0   # e.g. inet 172.20.22
 ```
 
 That address can change when WSL restarts. To make `127.0.0.1` work, switch WSL to mirrored networking: put `networkingMode=mirrored` under `[wsl2]` in `%UserProfile%.wslconfig`, then run `wsl --shutdown`. This changes networking for all WSL distros. On Linux and RHEL, `127.0.0.1` and the host's address work as usual.
+
+**When the server crashes:** compose restarts it, and the console log usually just stops. The reason is in the kernel log of the host (on Windows, the Podman machine): `podman machine ssh 'sudo dmesg -T | grep -A3 hlds_linux'` shows a line like `segfault at 0 ip ... in ns.so[2d9614,...]`. The number after `ns.so[` is the offset in `dist/server/ns/dlls/ns.so`, which isn't stripped, so `addr2line -f -C -e ns.so 0x2d9614` gives the function. For a full backtrace you need a core dump. `hlds` and `hltv` mount the volume `ns-classic_cores` at `/home/steam/hlds/cores`, but the host decides where cores go (`kernel.core_pattern`). On the Podman machine the default pipes them to `systemd-coredump`, which fails under WSL. To write them to the volume instead:
+
+```sh
+podman machine ssh 'echo "kernel.core_pattern=/home/steam/hlds/cores/core.%e.%p.%t" | sudo tee /etc/sysctl.d/50-coredump-file.conf && sudo sysctl -p /etc/sysctl.d/50-coredump-file.conf'
+```
+
+The setting covers every process on the machine. Processes without a `/home/steam/hlds/cores` directory just don't write a core. On RHEL, `systemd-coredump` works, so leave the default and use `coredumpctl list hlds_linux` and `coredumpctl debug`. Each core is around 100–300 MB, and old ones aren't deleted automatically. To debug one, copy it out together with the matching `ns.so` and run gdb in an i386 container.
 
 On RHEL, open the UDP ports in firewalld, for example `firewall-cmd --add-port=27016/udp --add-port=27020/udp --add-port=26900/udp --permanent`.
 
@@ -202,6 +210,8 @@ Only the server binary is built. The client (`hl_cdll`) is not needed for hostin
 **Client libraries:** `dist/ns/` also gets `cl_dlls/client.dll`, `cl_dlls/client.so` and `dlls/ns.dll` from ENSL's v3.3b9 release zip (`ns_v33b9_patch.zip`, checked against a pinned sha256). They're not in git. With `mp_consistency 1`, the server compares its copies of these files with each player's, and kicks players whose copies differ or that the server doesn't have: `Bad file (cl_dlls/client.so) Your NS version differs from the server's`. A client built here wouldn't match the release byte for byte, so the files always come from the release that players install, whatever `NS_GIT_REF` the server is built from. For another release, pass `--build-arg NS_CLIENT_URL=... --build-arg NS_CLIENT_SHA256=...`. The server's own `dlls/ns.so` is built here and can't match the release copy, so `builder/patches/0002-consistency-skip-ns-so.patch` leaves it out of the check. Clients never load it, and the client libraries still enforce the release version.
 
 **Bot fix:** `builder/patches/0003-bots-reset-navmesh-status-on-new-map.patch` fixes an upstream bug, still present on `develop`. Normally, after one map without a navmesh (most custom maps), bots never join again, on any map, until the server restarts or `mp_botsenabled` is switched off and on. The failed navmesh state carried over to every later map. With the patch, each map change tries that map's navmesh again.
+
+**Navmesh crash fix:** `builder/patches/0004-detour-closest-point-null-edge.patch` fixes a segfault in Detour, the bots' navigation library. `closestPointOnDetailEdges()` read through a null pointer when it found no edge, for example with a NaN position. That crashed the server mid-round in `dtNavMesh::closestPointOnPoly`, with nothing on the console. With the patch, the point is left unchanged instead.
 
 ## Custom maps (ns_maps)
 

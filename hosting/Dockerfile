@@ -70,7 +70,7 @@ RUN mkdir -p ~/.steam/sdk32 && \
 # small, so config and script changes don't copy it again.
 COPY --from=ns --chown=steam:steam . ns/
 RUN test -f ns/dlls/ns.so && \
-    mkdir -p ns/logs ns/demos && \
+    mkdir -p ns/logs ns/demos cores && \
     if LD_LIBRARY_PATH=. ldd hlds_linux engine_i486.so ns/dlls/ns.so | grep 'not found'; then exit 1; fi
 
 # Your own configs, copied over the mod directory: anything in overlay/, then
