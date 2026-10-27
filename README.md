@@ -172,7 +172,15 @@ That address can change when WSL restarts. To make `127.0.0.1` work, switch WSL 
 podman machine ssh 'echo "kernel.core_pattern=/home/steam/hlds/cores/core.%e.%p.%t" | sudo tee /etc/sysctl.d/50-coredump-file.conf && sudo sysctl -p /etc/sysctl.d/50-coredump-file.conf'
 ```
 
-The setting covers every process on the machine. Processes without a `/home/steam/hlds/cores` directory just don't write a core. On RHEL, `systemd-coredump` works, so leave the default and use `coredumpctl list hlds_linux` and `coredumpctl debug`. Each core is around 100–300 MB, and old ones aren't deleted automatically. To debug one, copy it out together with the matching `ns.so` and run gdb in an i386 container.
+The setting covers every process on the machine. Processes without a `/home/steam/hlds/cores` directory just don't write a core. On RHEL, `systemd-coredump` works, so leave the default and use `coredumpctl list hlds_linux` and `coredumpctl debug`. A core holds the server's memory, including its command line with the RCON and join passwords, so don't share one. Each core is around 100–300 MB, and old ones aren't deleted automatically. To debug one, run gdb in a container of the same server image, so the binaries match the core:
+
+```sh
+podman run --rm -it --user root -v ns-classic_cores:/cores:ro --entrypoint bash localhost/ns-classic-server:latest
+apt-get update && apt-get install -y gdb
+cd /home/steam/hlds && LD_LIBRARY_PATH=. gdb ./hlds_linux /cores/core.hlds_linux.<pid>.<time>   # then: bt
+```
+
+`ns.so` is built without debug info, so the backtrace has function names but no line numbers.
 
 On RHEL, open the UDP ports in firewalld, for example `firewall-cmd --add-port=27016/udp --add-port=27020/udp --add-port=26900/udp --permanent`.
 
@@ -214,6 +222,8 @@ Only the server binary is built. The client (`hl_cdll`) is not needed for hostin
 **Bot fix:** `builder/patches/0003-bots-reset-navmesh-status-on-new-map.patch` fixes an upstream bug, still present on `develop`. Normally, after one map without a navmesh (most custom maps), bots never join again, on any map, until the server restarts or `mp_botsenabled` is switched off and on. The failed navmesh state carried over to every later map. With the patch, each map change tries that map's navmesh again.
 
 **Navmesh crash fix:** `builder/patches/0004-detour-closest-point-null-edge.patch` fixes a segfault in Detour, the bots' navigation library. `closestPointOnDetailEdges()` read through a null pointer when it found no edge, for example with a NaN position. That crashed the server mid-round in `dtNavMesh::closestPointOnPoly`, with nothing on the console. With the patch, the point is left unchanged instead.
+
+**Phase gate crash fix:** `builder/patches/0005-detour-unlink-offmesh-on-tile-rebuild.patch` fixes another bot navigation segfault, in `dtNavMeshQuery::findPath`. NS links phase gates as off-mesh connections between any two tiles of the navmesh. When a tile was rebuilt (a structure placed on it), only its eight neighbours dropped their links to it. So the tile at the other end of a phase gate kept a link to a polygon that no longer existed, and the next path search through it crashed. With the patch, every tile drops its links to a rebuilt tile, and the phase gate connections are linked to the new tile again.
 
 ## Custom maps (ns_maps)
 

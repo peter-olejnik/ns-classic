@@ -1,0 +1,77 @@
+Don't leave off-mesh links to a removed tile in tiles further away.
+
+NS links off-mesh connections (phase gates) between any two tiles on the map
+(dtNavMesh::GlobalOffMeshLinks), but removeTile() only unlinked the eight
+neighbour tiles. When the tile cache rebuilt a tile, for example after a
+structure was placed on it, the tile at the other end of a phase gate kept a
+link to a poly of the old tile. findPath() follows links with
+getTileAndPolyByRefUnsafe(), so it read a poly index past the new tile's
+polys and crashed (seen on ns_45_beta3: commander move order -> findPath,
+poly 4 of a 2-poly tile).
+
+removeTile() now unlinks every tile, and the tile cache marks the off-mesh
+connections that start or end in a rebuilt tile dirty, so update() links
+them to the new tile again.
+
+--- a/main/source/detour/DetourNavMesh.cpp
++++ b/main/source/detour/DetourNavMesh.cpp
+@@ -1603,7 +1603,16 @@
+ 		for (int j = 0; j < nneis; ++j)
+ 			unconnectLinks(neis[j], tile);
+ 	}
+-		
++
++	// Disconnect off-mesh links from tiles further away. Off-mesh connections
++	// (phase gates) are linked across the whole map by GlobalOffMeshLinks(),
++	// and a link left behind points at a poly of the old tile.
++	for (int i = 0; i < m_maxTiles; ++i)
++	{
++		if (&m_tiles[i] != tile && m_tiles[i].header)
++			unconnectLinks(&m_tiles[i], tile);
++	}
++
+ 	// Reset tile.
+ 	if (tile->flags & DT_TILE_FREE_DATA)
+ 	{
+--- a/main/source/detour/DetourTileCache.cpp
++++ b/main/source/detour/DetourTileCache.cpp
+@@ -890,6 +890,21 @@
+ 	return DT_SUCCESS;
+ }
+ 
++// Removing a tile drops the links of off-mesh connections that start or end in
++// it; mark them dirty so update() links them to the rebuilt tile again.
++static void markOffMeshConnectionsDirty(dtOffMeshConnection* cons, const int count, const int tx, const int ty, const int tlayer)
++{
++	for (int i = 0; i < count; ++i)
++	{
++		dtOffMeshConnection* con = &cons[i];
++		if (con->state != DT_OFFMESH_CLEAN)
++			continue;
++		if ((con->FromTileX == tx && con->FromTileY == ty && con->FromTileLayer == tlayer) ||
++			(con->ToTileX == tx && con->ToTileY == ty && con->ToTileLayer == tlayer))
++			con->state = DT_OFFMESH_DIRTY;
++	}
++}
++
+ dtStatus dtTileCache::buildNavMeshTile(const dtCompressedTileRef ref, dtNavMesh* navmesh)
+ {	
+ 	dtAssert(m_talloc);
+@@ -965,6 +980,8 @@
+ 	{
+ 		// Remove existing tile.
+ 		navmesh->removeTile(navmesh->getTileRefAt(tile->header->tx,tile->header->ty,tile->header->tlayer),0,0);
++		markOffMeshConnectionsDirty(m_offMeshConnections, m_params.maxOffMeshConnections,
++									tile->header->tx, tile->header->ty, tile->header->tlayer);
+ 		return DT_SUCCESS;
+ 	}
+ 	
+@@ -1004,6 +1021,8 @@
+ 
+ 	// Remove existing tile.
+ 	navmesh->removeTile(navmesh->getTileRefAt(tile->header->tx,tile->header->ty,tile->header->tlayer),0,0);
++	markOffMeshConnectionsDirty(m_offMeshConnections, m_params.maxOffMeshConnections,
++								tile->header->tx, tile->header->ty, tile->header->tlayer);
+ 
+ 	// Add new tile, or leave the location empty.
+ 	if (navData)
