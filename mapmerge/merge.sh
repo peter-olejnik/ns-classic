@@ -156,5 +156,15 @@ if [[ -d "$content_dir" ]]; then
   echo "Applied content/ ($(find "$content_dir" -type f | wc -l) files)"
 fi
 
+# The engine sends the mapcycle file to every connecting client, and HLTV
+# can't parse more than about 8 KB of it (mapcycle.py HLTV_MAX_BYTES).
+for f in "$server_dir"/mapcycle*.txt; do
+  [[ -f "$f" ]] || continue
+  size=$(wc -c < "$f")
+  if (( size > 8192 )); then
+    echo "warning: ${f##*/} is $size bytes (over 8192): HLTV can't connect to a server that uses it"
+  fi
+done
+
 echo "Merge report: $report_dir/merge-report.md"
 echo "Server mod directory: $server_dir"

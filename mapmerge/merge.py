@@ -286,10 +286,16 @@ def md_report(r):
     w("Written to the mod directory; select one with `+mapcyclefile <file>`. The filtered files keep one "
       "version per map: the release if there is one, otherwise the newest beta. Tune with `[mapcycle]` "
       "in `rules.toml`.\n")
-    w("| File | Maps |\n|---|---:|")
+    limit = mapcycle.HLTV_MAX_BYTES
+    w("| File | Maps | Bytes |\n|---|---:|---:|")
     for name, (title, maps) in r["mapcycles"].items():
-        w(f"| `{name}` | {len(maps)} |")
+        size = r["mapcycle_sizes"][name]
+        w(f"| `{name}` | {len(maps)} | {size}{' ⚠' if size > limit else ''} |")
     w("")
+    if any(s > limit for s in r["mapcycle_sizes"].values()):
+        w(f"⚠ Over {limit} bytes: the engine sends the whole mapcycle file to every connecting client, and "
+          "HLTV can't parse one that long. It disconnects (\"ParseBaseline: needed delta encoder missing\") "
+          "and exits. Don't use these files with HLTV, or trim them with `[mapcycle]` exclude.\n")
     w("<details><summary>Versions left out of the filtered mapcycles (%d maps, %d families)</summary>\n"
       % (sum(len(v["dropped"]) for v in r["map_versions"]), len(r["map_versions"])))
     for v in r["map_versions"]:
@@ -331,10 +337,12 @@ def main():
     original = a.ns / "mapcycle.txt"
     original = mapcycle.read_mapcycle(original.read_text(errors="replace")) if original.is_file() else []
     cycles, versions = mapcycle.build(sorted(server_maps.values(), key=str.lower), original, rules)
+    sizes = {}
     for name, (title, maps) in cycles.items():
-        mapcycle.write_mapcycle(a.out / "maps" / name, title, maps,
-                                rules["mapcycle"]["minplayers"], rules["mapcycle"]["maxplayers"])
+        sizes[name] = mapcycle.write_mapcycle(a.out / "maps" / name, title, maps,
+                                              rules["mapcycle"]["minplayers"], rules["mapcycle"]["maxplayers"])
     result["mapcycles"] = cycles
+    result["mapcycle_sizes"] = sizes
     result["map_versions"] = versions
 
     (a.out / "merge.json").write_text(json.dumps(result, indent=2))

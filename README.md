@@ -18,7 +18,7 @@ The goal is to build the NS mod binaries from source and run a dedicated server 
 | `content/` | Committed content you make for the server, laid out like the mod directory, e.g. bot navmeshes in `content/navmeshes/<map>.nav`. `mapmerge/merge.sh` copies it into `dist/server/ns/` last, so it wins over the stock files and the merged maps. |
 | `navgen/` | A headless bot navmesh generator (NavEditor's Build and Save steps), built in a container. Its output goes to `dist/navmeshes/`. `mapmerge/merge.sh --navgen` runs it for maps without a navmesh. See [Generating navmeshes](#generating-navmeshes-navgen). |
 | `mapmerge/` | The container that analyzes `ns_maps/` against `dist/ns/` and merges it according to `rules.toml`. Scripts: `analyze.sh` and `merge.sh`. Its output goes to `dist/server/ns/`, `dist/maps/` and `dist/mapmerge/`. |
-| `hosting/` | The dedicated server image (`Dockerfile`, `build.sh`) and stack (`compose.yaml`): HLDS installed with SteamCMD, plus `dist/server/ns/`. Runs HLDS, HLTV and log/demo rotation. |
+| `hosting/` | The dedicated server image (`Dockerfile`, `build.sh`) and stack (`compose.yaml`): HLDS installed with SteamCMD, plus `dist/server/ns/`. Runs HLDS, log/demo rotation and, optionally, HLTV. |
 | `hosting/server.cfg`, `hosting/motd.txt` | Your server config and message of the day, created from the committed `.example` files and copied over `ns/` in the image. |
 | `hosting/overlay/` | Any other files to copy over `ns/` in the image (`mapcycle.txt`, `banned.cfg`, ...). |
 
@@ -49,7 +49,7 @@ builder/build.sh          # compile ns.so          → dist/ns/
 mapmerge/merge.sh         # add the custom maps    → dist/server/ns/
 hosting/build.sh          # build the server image → localhost/ns-classic-server
 cd hosting
-podman compose up -d      # or docker compose
+podman compose up -d      # or docker compose; add --profile hltv for HLTV
 ```
 
 `hosting/build.sh` bakes `dist/server/ns/` into the image. Set `NS_DIR=dist/ns` to build a server without the custom maps. Re-run it after a new build, a merge or a config change. The first build downloads HLDS (about 1 GB). That layer is shared with `mapmerge/` and cached.
@@ -138,8 +138,10 @@ NS's own copy of the editor was built from an unpublished version of that code, 
 | Service  | Purpose | Ports |
 |----------|---------|-------|
 | `hlds`   | The NS dedicated server | 27016/udp (game and RCON), 26900/udp (VAC) |
-| `hltv`   | Spectator and demo proxy. It connects to `hlds` and records demos. A small preload library fixes a Valve bug that crashed HLTV whenever it started a demo (`hosting/hltvfix/`). | 27020/udp |
+| `hltv`   | Optional, off by default. Spectator and demo proxy. It connects to `hlds` and records demos. A small preload library fixes a Valve bug that crashed HLTV whenever it started a demo (`hosting/hltvfix/`). | 27020/udp |
 | `rotate` | Compresses logs (LZ4) and demos (zip) once they've been idle for 30 minutes | – |
+
+`hltv` is in the compose profile `hltv`: start it with `podman compose --profile hltv up -d`, and stop it with `podman compose --profile hltv rm -sf hltv`. It can't connect to a server whose mapcycle file is over about 8 KB, and it restarts in a loop if it can't (see [Mapcycles](#mapcycles)).
 
 All three use the same image; the container command picks the role (`hosting/scripts/entry.sh`). Logs, demos and core dumps are stored in the named volumes `ns-classic_logs`, `ns-classic_demos` and `ns-classic_cores`, which avoids permission problems with rootless Podman.
 
@@ -164,7 +166,7 @@ wsl -d podman-machine-default -- ip -4 -o addr show eth0   # e.g. inet 172.20.22
 
 That address can change when WSL restarts. To make `127.0.0.1` work, switch WSL to mirrored networking: put `networkingMode=mirrored` under `[wsl2]` in `%UserProfile%.wslconfig`, then run `wsl --shutdown`. This changes networking for all WSL distros. On Linux and RHEL, `127.0.0.1` and the host's address work as usual.
 
-**When the server crashes:** compose restarts it, and the console log usually just stops. The reason is in the kernel log of the host (on Windows, the Podman machine): `podman machine ssh 'sudo dmesg -T | grep -A3 hlds_linux'` shows a line like `segfault at 0 ip ... in ns.so[2d9614,...]`. The number after `ns.so[` is the offset in `dist/server/ns/dlls/ns.so`, which isn't stripped, so `addr2line -f -C -e ns.so 0x2d9614` gives the function. For a full backtrace you need a core dump. `hlds` and `hltv` mount the volume `ns-classic_cores` at `/home/steam/hlds/cores`, but the host decides where cores go (`kernel.core_pattern`). On the Podman machine the default pipes them to `systemd-coredump`, which fails under WSL. To write them to the volume instead:
+**When the server crashes:** compose restarts it, and the console log usually just stops. The reason is in the kernel log of the host (on Windows, the Podman machine): `podman machine ssh 'sudo dmesg -T | grep -A3 hlds_linux'` shows a line like `segfault at 0 ip ... in ns.so[2d9614,...]`. The number after `ns.so[` is the offset in `dist/server/ns/dlls/ns.so`, which isn't stripped, so `addr2line -f -C -e ns.so 0x2d9614` gives the function. For a full backtrace you need a core dump. `hlds` and `hltv` (if enabled) mount the volume `ns-classic_cores` at `/home/steam/hlds/cores`, but the host decides where cores go (`kernel.core_pattern`). On the Podman machine the default pipes them to `systemd-coredump`, which fails under WSL. To write them to the volume instead:
 
 ```sh
 podman machine ssh 'echo "kernel.core_pattern=/home/steam/hlds/cores/core.%e.%p.%t" | sudo tee /etc/sysctl.d/50-coredump-file.conf && sudo sysctl -p /etc/sysctl.d/50-coredump-file.conf'
@@ -268,6 +270,8 @@ The filtered files keep one version of each map (logic in `mapmerge/mapcycle.py`
 - Suffixes like `_mvm`, `_classic`, `_mp` or `2` (`ns_tanith2`) mark different maps, so those are all kept.
 
 `merge-report.md` lists which versions were left out. To adjust the result, use `mapcycle.include`, which lists a version anyway, and `mapcycle.exclude`, which takes glob patterns for maps never to list.
+
+**Size limit with HLTV:** the engine sends the whole mapcycle file to every client that connects. HLTV can't parse more than about 8.5 KB of it (about 180 maps). It logs `ParseBad: illegal server message`, disconnects with `ParseBaseline: needed delta encoder missing`, and exits. `merge.sh` prints a warning for every `mapcycle*.txt` over 8192 bytes, including ones from `content/`, and `merge-report.md` lists each file's size. Players' clients get the same string but handle a long one fine (tested with the 13.9 KB `mapcycle.ns.txt`), so the limit only matters with HLTV.
 
 ### Merge rules (`mapmerge/rules.toml`)
 

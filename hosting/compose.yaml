@@ -1,6 +1,7 @@
 # NS server stack. Build the image first with hosting/build.sh, then:
 #
 #   cd hosting && podman compose up -d      (or docker compose)
+#   podman compose --profile hltv up -d     also start the HLTV proxy
 #
 # Settings: .env.default, overridden by an optional .env (see .env.default).
 
@@ -30,8 +31,11 @@ services:
       # Core dumps, if the host's core_pattern points here (see README)
       - cores:/home/steam/hlds/cores
 
+  # Optional: started only with --profile hltv. It can't connect to a server
+  # whose mapcycle file is over about 8 KB (see mapmerge/merge-report.md).
   hltv:
     <<: *server
+    profiles: [hltv]
     command: hltv
     tty: true
     stdin_open: true
