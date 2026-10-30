@@ -8,6 +8,7 @@ The goal is to build the NS mod binaries from source and run a dedicated server 
 
 | Path     | What it is |
 |----------|------------|
+| `setup.sh` | Interactive setup. It asks what to build and run, saves your choices in `plan.env`, and runs the scripts below. See [Quick start](#quick-start-setupsh). |
 | `src/` | A git checkout of the community-maintained [ENSL/NS](https://github.com/ENSL/NS) v3.3 project: C++ source, maps, models, sounds and configs. It isn't tracked in this repo. `builder/build.sh` clones it if it's missing. |
 | `src/main/` | The `ns` mod directory: game content plus `source/`, the code for the server DLL (`ns.so` / `ns.dll`), the client DLL, particles and the HPB bot. |
 | `src/main/source/linux/` | Linux makefiles (`Makefile`, `Makefile.nsdll`, `Makefile.hl_cdll`). They build 32-bit (i386) binaries. |
@@ -42,7 +43,20 @@ This is a work in progress.
 
 ## Running a server
 
-Requirements: Podman or Docker, with Compose (`podman compose` or `docker compose`). Everything runs in containers. The full pipeline is:
+Requirements: Podman or Docker, with Compose (`podman compose` or `docker compose`). Everything runs in containers.
+
+### Quick start: `setup.sh`
+
+```sh
+./setup.sh          # answer the questions, then run the plan
+./setup.sh run      # run the saved plan again, without questions
+./setup.sh edit     # change the answers without running
+./setup.sh show     # print the saved plan and the steps it would run
+```
+
+`setup.sh` asks what you want: the container engine, whether to build the server binary, stock or custom maps, navmesh generation, the server image, starting the server, and HLTV. It can also set the server name, port, player limit, start map, mapcycle, bots, and the RCON and join passwords. Press Enter to keep the current answer, which is marked with `*`. The answers are saved in `plan.env` (gitignored, no passwords), and the next run uses them as the defaults. The script then runs the steps below for you. Settings go where the server already reads them: the port, the `HLDS_OPTS` options and the passwords go in `hosting/.env`, and the hostname and `mp_botsenabled` go in `hosting/server.cfg`. On Windows, run it from Git Bash or WSL.
+
+The steps are the scripts below, so you can still run any of them by hand. The full pipeline is:
 
 ```sh
 builder/build.sh          # compile ns.so          → dist/ns/

@@ -17,6 +17,13 @@ Fully containerized **build** and **hosting** for Natural Selection (NS1), the G
 - Ignore files belong in the build context's root (`/.dockerignore` for `builder/`, `hosting/.dockerignore`), not in `<Dockerfile>.dockerignore`. For large inputs that only one build needs, use named build contexts (`--build-context name=path`, then `COPY --from=name`) instead, as `mapmerge/` and `hosting/` do. This works with remote Podman.
 - Keep RHEL in mind for the host: rootless containers, and SELinux volume labels (`:Z`) on bind mounts. `hosting/` uses named volumes, which need neither `:Z` nor uid mapping.
 
+`setup.sh` (repo root) is the turnkey entry point. It's an interactive wizard that saves the user's choices to `plan.env` and runs them as steps, each calling the existing script: `build` (builder/build.sh), `maps` (mapmerge/merge.sh with `--navgen`/`--navgen-all`), `image` (hosting/build.sh with `NS_DIR`) and `start` (`compose [--profile hltv] up -d`, and `rm -sf hltv` when HLTV is off). New plugins and optional features should plug into it rather than adding more manual steps:
+- add a key to `PLAN` (default) and `CHOICES` (allowed values);
+- add a question in `wizard()`;
+- add a `plan_<step>` function (sets TITLE/DIR/ENVS/CMD; returns 1 with WHY to skip) listed in `STEPS`.
+
+`plan.env` holds raw `KEY=value` lines. It's parsed, not sourced, and unknown keys get a warning. It never holds secrets: the wizard writes passwords, `HLDS_PORT` and `HLDS_OPTS` (`+maxplayers`/`+map`/`+mapcyclefile`, edited in place) to `hosting/.env`, and `hostname`/`mp_botsenabled` to `hosting/server.cfg`. Keys are only written when the effective value changes. `./setup.sh run` runs the plan without a terminal (RHEL). The individual scripts must keep working on their own.
+
 ## Layout
 
 - `src/`: a git clone of upstream [ENSL/NS](https://github.com/ENSL/NS) (source and game assets, about 1.3 GB). It's gitignored here, and `builder/build.sh` clones it when it's missing (`NS_GIT_URL`, `NS_GIT_REF`; default tag `v3.3b9`). Keep the default on the release that clients run: `develop` (bot work after b9) makes b9 clients drop with `svc_bad` at round end with bots. That was verified by A/B testing against ENSL's release binary and our build of the tag. Move the default only to a new release tag, and test a full round with bots before you do. The user may also place a local copy or fork there. On Windows the checkout has CRLF, because upstream's `.gitattributes` uses `text=auto`.
@@ -100,6 +107,8 @@ Fully containerized **build** and **hosting** for Natural Selection (NS1), the G
 ## Useful commands
 
 ```sh
+# Everything, interactively (choices saved in plan.env); `run` repeats the saved plan
+./setup.sh                                   # edit | run | show
 # Build the server binary → dist/ns/
 builder/build.sh                             # [out dir] [extra build args], e.g. --build-arg CFG=debug
 NS_GIT_REF=develop builder/build.sh          # ref used only when cloning a missing src/ (default v3.3b9)

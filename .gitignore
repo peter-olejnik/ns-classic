@@ -10,3 +10,6 @@ mapmerge/__pycache__/
 
 # Left by `podman machine ssh` from Git Bash (a known_hosts line)
 NUL
+
+# Saved choices of ./setup.sh (no secrets)
+plan.env

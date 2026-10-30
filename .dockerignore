@@ -11,6 +11,8 @@ builder/*
 src/.git
 src/hd
 *.md
+plan.env
+setup.sh
 
 # Visual Studio caches/databases (100+ MB, not needed on Linux)
 **/*.ncb
