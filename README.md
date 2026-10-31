@@ -18,6 +18,7 @@ The goal is to build the NS mod binaries from source and run a dedicated server 
 | `ns_maps/` | A dumping ground for custom maps and anything they might need, in any layout: archives, loose files, mirrored download sites. Every `.bsp` is merged as a map, along with only the files those maps need. |
 | `content/` | Committed content you make for the server, laid out like the mod directory, e.g. bot navmeshes in `content/navmeshes/<map>.nav`. `mapmerge/merge.sh` copies it into `dist/server/ns/` last, so it wins over the stock files and the merged maps. |
 | `navgen/` | A headless bot navmesh generator (NavEditor's Build and Save steps), built in a container. Its output goes to `dist/navmeshes/`. `mapmerge/merge.sh --navgen` runs it for maps without a navmesh. See [Generating navmeshes](#generating-navmeshes-navgen). |
+| `plugins/` | Server plugins, each built from source in a container to `dist/plugins/<name>/`, and added to the image with `PLUGINS=<name> hosting/build.sh`. So far: `amxmodx/` (AMX Mod X with Metamod-P). See [Plugins: AMX Mod X](#plugins-amx-mod-x). |
 | `mapmerge/` | The container that analyzes `ns_maps/` against `dist/ns/` and merges it according to `rules.toml`. Scripts: `analyze.sh` and `merge.sh`. Its output goes to `dist/server/ns/`, `dist/maps/` and `dist/mapmerge/`. |
 | `hosting/` | The dedicated server image (`Dockerfile`, `build.sh`) and stack (`compose.yaml`): HLDS installed with SteamCMD, plus `dist/server/ns/`. Runs HLDS, log/demo rotation and, optionally, HLTV. |
 | `hosting/server.cfg`, `hosting/motd.txt` | Your server config and message of the day, created from the committed `.example` files and copied over `ns/` in the image. |
@@ -146,6 +147,30 @@ NS's own copy of the editor was built from an unpublished version of that code, 
 
 `navgen dump <file.nav>` prints a fingerprint of each tile layer for comparing two files, and `navgen tile <file.nav> <mesh> <tx> <ty> <layer>` prints one layer as text.
 
+### Plugins: AMX Mod X
+
+[AMX Mod X](https://github.com/alliedmodders/amxmodx) adds admin commands, map votes and scripted plugins. It runs on [Metamod-P](https://github.com/Bots-United/metamod-p), which sits between the engine and `ns.so`. `plugins/amxmodx/` builds both from source in a container and exports them as an overlay for the mod directory. In `setup.sh`, answer the AMX Mod X question, or by hand:
+
+```sh
+plugins/amxmodx/build.sh                  # → dist/plugins/amxmodx/addons/{metamod,amxmodx}
+PLUGINS=amxmodx hosting/build.sh          # bake it into the server image
+```
+
+- **Source:** each repo is built at the latest commit of its default branch. `build.sh` looks those commits up with `git ls-remote`, so a rebuild picks up upstream changes, and an unchanged upstream reuses the cached build. Pin or fork with `AMXMODX_GIT_REF`/`AMXMODX_GIT_URL` and `METAMOD_GIT_REF`/`METAMOD_GIT_URL` (also `AMBUILD_`, `HLSDK_`, `METAMOD_HL1_`). The commits used are in `addons/amxmodx/ns-classic-sources.txt`.
+- **What's in it:** AMXX's base package with its NS package on top: NS configs, plugins (`nscommands`, `mapchooser`, `idlekicker`, ...) and the `ns` module. MySQL support isn't built, because its client libraries are a separate large download. SQLite works.
+- **How it loads:** when the image has `addons/metamod/dlls/metamod.so`, `hosting/Dockerfile` points both `gamedll` lines in `liblist.gam` at metamod. Metamod then loads `dlls/ns.so` (`addons/metamod/config.ini`). `NS_GAMEDLL` still works. Without `PLUGINS`, the image has no plugins and the stock `liblist.gam`.
+- **Admins and settings:** put your files in `hosting/overlay/addons/amxmodx/configs/` (for example `users.ini` with your Steam ID, `amxx.cfg`, `plugins.ini`). They're copied over the plugin's defaults. To add a plugin, put its `.amxx` file in `hosting/overlay/addons/amxmodx/plugins/` and list it in your `plugins.ini`. `addons/amxmodx/scripting/amxxpc` compiles `.sma` files inside the container.
+- **Check it's running:** `podman exec ns-classic-hlds-1 ./rcon.sh meta list` and `./rcon.sh amxx plugins`.
+
+**The NS module, patched for this build:** upstream AMXX's `ns` module finds NS's internal data and functions at fixed offsets taken from NS 3.2's `ns_i386.so`. Our NS 3.3 `ns.so` (GCC 11) has a different layout, so natives like `ns_get_res` read the wrong memory and `ns_get_teamres` crashed the server. `plugins/amxmodx/patches/0001-ns-module-offsets-and-symbols-from-ns-so.patch` fixes that:
+- **Field offsets come from the build.** `builder/` compiles `builder/offsets/ns_offsets.cpp` with `ns.so`'s own compile line and writes `dist/ns/dlls/ns.so.offsets`: the GNU build ID of that `ns.so`, then one `Class::member offset` line per field. The module reads it at startup.
+- **Functions are looked up by name** in the loaded `ns.so` (it has symbols), for example `GetGameRules` and `AvHBaseBuildable::StartRecycle`.
+- **Mismatch check:** if the file is missing, or its build ID isn't the loaded `ns.so`'s (for example with `NS_GAMEDLL`, or a `dist/server/ns` merged before the rebuild), the module logs `The natives that use NS memory are disabled` in `addons/amxmodx/logs/` and those natives return 0. The server doesn't crash. Natives that use only entity fields (`ns_get_class`, `ns_get_user_team`, ...) keep working. The startup line `[NS] Using the field offsets in ns/dlls/ns.so.offsets` means everything is enabled.
+- **NS's own bots** count as connected. NS connects them itself, so they never pass through metamod, and the module returned 0 for every bot.
+- **Raw memory natives off:** upstream ships with `DEVELOPER_BUILD` on, which gives every plugin `refmem`/`setmem` (read and write any address). The patch turns it off.
+
+Tested with bots on HL25: resources, experience, points, score, deaths, hive count, weapon clip/damage/range, reserve ammo (LMG 100 and pistol 20 at spawn, as in NS's balance), team resources, and writes that the game picked up. The offsets also match the displacements in `ns.so`'s own accessors (`AvHPlayer::GetResources` reads `+0x730`).
+
 
 ### Services
 
@@ -219,7 +244,7 @@ On Windows, run it from Git Bash or WSL. The script also needs `git` if `src/` h
 
 `build.sh` builds `builder/Dockerfile` and then copies `/ns` out of the image. It uses `create` and `cp` because remote Podman (the Windows/macOS podman machine) does not support `build --output`. With a local engine you can also run `podman build -f builder/Dockerfile -o dist .` directly.
 
-The output `dist/ns/` is the full `src/main` mod directory without `source/`, plus the freshly compiled `dlls/ns.so` that `liblist.gam` points to. Place it in an HLDS install as `<hlds>/ns`.
+The output `dist/ns/` is the full `src/main` mod directory without `source/`, plus the freshly compiled `dlls/ns.so` that `liblist.gam` points to. Place it in an HLDS install as `<hlds>/ns`. Next to it, `dlls/ns.so.offsets` lists the field offsets of that `ns.so` for AMX Mod X's NS module (see [Plugins: AMX Mod X](#plugins-amx-mod-x)). Without AMX Mod X it's unused.
 
 The build runs on Ubuntu 22.04. The source in `src/` is never modified. Inside the container the build does three things:
 

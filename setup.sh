@@ -16,6 +16,7 @@
 # Steps, in order (each one can be skipped by the plan):
 #   build   builder/build.sh     -> dist/ns
 #   maps    mapmerge/merge.sh    -> dist/server/ns (custom maps, navgen, content/)
+#   amxmodx plugins/amxmodx/build.sh -> dist/plugins/amxmodx (AMX Mod X + Metamod-P)
 #   image   hosting/build.sh     -> localhost/ns-classic-server
 #   start   compose up -d        (hosting/compose.yaml)
 #
@@ -30,7 +31,7 @@ plan_file="$repo/plan.env"
 hosting="$repo/hosting"
 image="localhost/ns-classic-server:latest"
 
-STEPS=(build maps image start)
+STEPS=(build maps amxmodx image start)
 
 declare -A PLAN=(
   [ENGINE]=auto
@@ -42,8 +43,9 @@ declare -A PLAN=(
   [IMAGE]=yes
   [START]=yes
   [HLTV]=no
+  [AMXMODX]=off
 )
-PLAN_KEYS=(ENGINE BUILD BUILD_CFG NS_GIT_REF MAPS NAVGEN IMAGE START HLTV)
+PLAN_KEYS=(ENGINE BUILD BUILD_CFG NS_GIT_REF MAPS NAVGEN AMXMODX IMAGE START HLTV)
 declare -A CHOICES=(
   [ENGINE]="auto podman docker"
   [BUILD]="auto always skip"
@@ -53,6 +55,7 @@ declare -A CHOICES=(
   [IMAGE]="yes no"
   [START]="yes no"
   [HLTV]="yes no"
+  [AMXMODX]="off auto always"
 )
 
 if [[ -t 1 ]]; then B=$'\e[1m' D=$'\e[2m' R=$'\e[0m'; else B="" D="" R=""; fi
@@ -323,6 +326,11 @@ wizard() {
       off "" mapcycle "maps in mapcycle.ns/co/siege.txt" all "every map (the first run takes long)"
   fi
 
+  choose AMXMODX "AMX Mod X (admin commands, votes, plugins; with Metamod-P, built from source)" \
+    off "" \
+    auto "build once from the latest upstream source, then reuse it" \
+    always "rebuild from the latest upstream source every run (cached if unchanged)"
+
   choose IMAGE "Build the server image (hosting/)" \
     yes "needed after any build, merge or settings change" no ""
   choose START "Start or update the server (compose up -d)" yes "" no ""
@@ -381,9 +389,26 @@ plan_maps() {
   if [[ "${PLAN[MAPS]}" == stock ]]; then WHY="MAPS=stock"; return 1; fi
 }
 
+plan_amxmodx() {
+  TITLE="Build AMX Mod X + Metamod-P -> dist/plugins/amxmodx" DIR="$repo" ENVS=()
+  CMD=(plugins/amxmodx/build.sh)
+  case "${PLAN[AMXMODX]}" in
+    off) WHY="AMXMODX=off"; return 1 ;;
+    auto) if [[ -d "$repo/dist/plugins/amxmodx" ]]; then WHY="dist/plugins/amxmodx exists (AMXMODX=auto)"; return 1; fi ;;
+  esac
+}
+
+# The plugins the image gets (hosting/build.sh PLUGINS), in order
+plugins() {
+  local -a p=()
+  [[ "${PLAN[AMXMODX]}" == off ]] || p+=(amxmodx)
+  echo "${p[*]}"
+}
+
 plan_image() {
   TITLE="Build the server image from $(ns_dir)" DIR="$repo"
   ENVS=("NS_DIR=$repo/$(ns_dir)")
+  if [[ -n "$(plugins)" ]]; then ENVS+=("PLUGINS=$(plugins)"); TITLE+=" + $(plugins)"; fi
   CMD=(hosting/build.sh)
   if [[ "${PLAN[IMAGE]}" == no ]]; then WHY="IMAGE=no"; return 1; fi
 }
@@ -435,6 +460,11 @@ preflight() {
   fi
   if ! plan_maps && plan_image && [[ "${PLAN[MAPS]}" == merge && ! -d "$repo/dist/server/ns" ]]; then
     die "dist/server/ns is missing"
+  fi
+  if plan_amxmodx; then
+    command -v git >/dev/null || die "git not found (plugins/amxmodx/build.sh looks up the latest commits)"
+  elif [[ "${PLAN[AMXMODX]}" != off ]] && plan_image && [[ ! -d "$repo/dist/plugins/amxmodx" ]]; then
+    die "dist/plugins/amxmodx is missing"
   fi
   if ! plan_image && plan_start; then
     "$e" image inspect "$image" >/dev/null 2>&1 || die "no $image yet: set IMAGE=yes"

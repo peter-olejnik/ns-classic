@@ -6,6 +6,10 @@
 # from builder/build.sh's dist/ns plus the custom maps. Override it with
 # NS_DIR, e.g. NS_DIR=dist/ns for a server without custom maps.
 #
+# PLUGINS lists the plugins to add, space-separated, e.g. PLUGINS=amxmodx.
+# Each is dist/plugins/<name>, built by plugins/<name>/build.sh, and copied
+# over the mod directory in that order. Without PLUGINS the image has none.
+#
 # hosting/server.cfg and hosting/motd.txt replace the ones in the mod directory.
 # They are gitignored; if missing, they are created from the committed
 # server.cfg.example and motd.txt.example.
@@ -33,10 +37,21 @@ for f in server.cfg motd.txt; do
   fi
 done
 
+# The plugins, combined into one build context (empty without PLUGINS)
+plugins_dir="$repo_root/dist/hosting-plugins"
+rm -rf "$plugins_dir"
+mkdir -p "$plugins_dir"
+for p in ${PLUGINS:-}; do
+  [[ -d "$repo_root/dist/plugins/$p" ]] ||
+    { echo "error: dist/plugins/$p not found; run plugins/$p/build.sh first" >&2; exit 1; }
+  cp -a "$repo_root/dist/plugins/$p/." "$plugins_dir/"
+  echo "Plugin: $p"
+done
+
 engine="${CONTAINER_ENGINE:-$(command -v podman >/dev/null && echo podman || echo docker)}"
 
 "$engine" build -f "$repo_root/hosting/Dockerfile" -t "$image" \
-  --build-context ns="$ns_dir" \
+  --build-context ns="$ns_dir" --build-context plugins="$plugins_dir" \
   "$@" "$repo_root/hosting"
 
 echo "Built $image"

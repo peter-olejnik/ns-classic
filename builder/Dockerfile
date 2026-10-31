@@ -62,6 +62,15 @@ RUN make CFG=${CFG} particles SLIBB='ar cqs $@ $(POBJS)' && \
     make CFG=${CFG} ns CC='"gcc -m32 -std=c++11"' && \
     test -f ${CFG}/ns.so
 
+# dlls/ns.so.offsets: this ns.so's GNU build ID and the field offsets of the
+# NS classes that AMX Mod X's ns module uses (plugins/amxmodx/patches). The
+# module's own offsets are NS 3.2's. offsets.sh compiles ns_offsets.cpp with
+# the ns build's compile line; CC must match the one above.
+FROM build AS offsets
+ARG CFG=release
+COPY --chmod=755 builder/offsets/ /offsets/
+RUN /offsets/offsets.sh "${CFG}" "gcc -m32 -std=c++11" /offsets/ns_offsets.cpp /offsets/ns.so.offsets
+
 # Client libraries from the release that players install. The server precaches
 # cl_dlls/client.{dll,so} and dlls/ns.dll for its consistency check
 # (mp_consistency 1) and kicks players whose copies differ from the server's
@@ -90,6 +99,7 @@ COPY src/main /out/ns
 RUN rm -rf /out/ns/source /out/ns/navmeshes/NavEditor
 COPY --from=client /client/ns/ /out/ns/
 COPY --from=build /src/main/source/linux/${CFG}/ns.so /out/ns/dlls/ns.so
+COPY --from=offsets /offsets/ns.so.offsets /out/ns/dlls/ns.so.offsets
 
 FROM scratch AS export
 COPY --from=package /out/ /

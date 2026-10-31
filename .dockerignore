@@ -1,13 +1,15 @@
-# Build context for builder/Dockerfile is the repo root; it only needs src/main
-# and builder/patches. Read by both Docker and Podman/Buildah.
+# Build context for builder/Dockerfile is the repo root; it only needs src/main,
+# builder/patches and builder/offsets. Read by both Docker and Podman/Buildah.
 .git
 dist
 hosting
 ns_maps
 mapmerge
+plugins
 content
 builder/*
 !builder/patches
+!builder/offsets
 src/.git
 src/hd
 *.md

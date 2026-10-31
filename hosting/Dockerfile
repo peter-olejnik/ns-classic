@@ -4,7 +4,9 @@
 # hosting/build.sh passes the mod directory as the named build context "ns":
 #
 #   podman build -f hosting/Dockerfile -t localhost/ns-classic-server \
-#     --build-context ns=dist/server/ns hosting
+#     --build-context ns=dist/server/ns --build-context plugins=<dir> hosting
+#
+# and the plugins (e.g. AMX Mod X, plugins/amxmodx/) as "plugins".
 #
 # The container's command picks its role: hlds (default), hltv or rotate.
 # See scripts/entry.sh.
@@ -72,6 +74,28 @@ COPY --from=ns --chown=steam:steam . ns/
 RUN test -f ns/dlls/ns.so && \
     mkdir -p ns/logs ns/demos cores && \
     if LD_LIBRARY_PATH=. ldd hlds_linux engine_i486.so ns/dlls/ns.so | grep 'not found'; then exit 1; fi
+
+# Plugins (PLUGINS in build.sh, each from dist/plugins/<name>), copied over
+# the mod directory; the "plugins" context is empty without any. With
+# metamod, the engine has to load it instead of ns.so, and metamod loads
+# dlls/ns.so (addons/metamod/config.ini). The HL25 engine takes the gamedll
+# line and swaps .dll for .so (it ignores gamedll_linux), so both lines are
+# pointed at metamod.
+COPY --from=plugins --chown=steam:steam . ns/
+RUN if [ -f ns/addons/metamod/dlls/metamod.so ]; then \
+      sed -i -E \
+        -e 's#^([[:space:]]*gamedll)[[:space:]].*#\1 "addons\\metamod\\dlls\\metamod.dll"#' \
+        -e 's#^([[:space:]]*gamedll_linux)[[:space:]].*#\1 "addons/metamod/dlls/metamod.so"#' \
+        ns/liblist.gam && \
+      grep -q '^gamedll "addons.metamod.dlls.metamod.dll"' ns/liblist.gam; \
+    fi && \
+    # The AMXX plugin compiler; dist/ on a Windows drive loses exec bits
+    if [ -f ns/addons/amxmodx/scripting/amxxpc ]; then \
+      chmod 755 ns/addons/amxmodx/scripting/amxxpc ns/addons/amxmodx/scripting/*.sh; \
+    fi && \
+    for f in $(find ns/addons -name '*.so' 2>/dev/null); do \
+      if LD_LIBRARY_PATH=. ldd "$f" | grep 'not found'; then echo "$f: missing libraries" >&2; exit 1; fi; \
+    done
 
 # Your own configs, copied over the mod directory: anything in overlay/, then
 # server.cfg and motd.txt (build.sh creates them from the *.example files)

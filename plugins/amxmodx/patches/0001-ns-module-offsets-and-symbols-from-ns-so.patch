@@ -1,0 +1,793 @@
+diff --git a/modules/ns/AMBuilder b/modules/ns/AMBuilder
+index c85f94d..28eb407 100644
+--- a/modules/ns/AMBuilder
++++ b/modules/ns/AMBuilder
+@@ -12,6 +12,7 @@ binary.sources = [
+   'dllapi.cpp',
+   'utils.cpp',
+   'amxxapi.cpp',
++  'ns_layout.cpp',
+   'engineapi.cpp',
+   'TitleManager.cpp',
+   'ParticleManager.cpp',
+diff --git a/modules/ns/CPlayer.h b/modules/ns/CPlayer.h
+index f2f7ad3..abb101d 100644
+--- a/modules/ns/CPlayer.h
++++ b/modules/ns/CPlayer.h
+@@ -89,6 +89,15 @@ public:
+ 	};
+ 	inline int IsConnected(void)
+ 	{
++		// NS's own bots: NS calls ClientConnect and ClientPutInServer itself,
++		// so they never pass through metamod. Count a fake client in the game
++		// as connected (the engine still reports its disconnect).
++		if (!m_iIsConnected && m_pEdict != NULL && !m_pEdict->free &&
++			(m_pEdict->v.flags & FL_FAKECLIENT) && m_pEdict->pvPrivateData != NULL)
++		{
++			Connect();
++			SetBot(1);
++		}
+ 		return m_iIsConnected;
+ 	};
+ 
+diff --git a/modules/ns/amxxapi.cpp b/modules/ns/amxxapi.cpp
+index 043fc7c..d8236b6 100644
+--- a/modules/ns/amxxapi.cpp
++++ b/modules/ns/amxxapi.cpp
+@@ -88,14 +88,18 @@ void OnAmxxAttach()
+ 	AddNatives_Structure();
+ 	AddNatives_General();
+ 
++#ifdef __linux__
++	// The offsets and functions of the ns.so that is running, which is
++	// dlls/ns.so (not the NS 3.2 ns_i386.so the constants were taken from)
++	NS_LoadLayout();
++
++	MFuncs_Initialize(NULL);
++	MPlayerFuncs_Initialize(NULL);
++#else
+ 	char *FuncBase;
+ 	char FileName[256];
+ 	DLHANDLE DLLBase;
+-#ifdef __linux__
+-	ke::SafeSprintf(FileName, sizeof(FileName), "%s/dlls/ns_i386.so", MF_GetModname());
+-#else
+ 	ke::SafeSprintf(FileName, sizeof(FileName), "%s\\dlls\\ns.dll", MF_GetModname());
+-#endif
+ 
+ 	DLLBase = DLOPEN(FileName);
+ 	FuncBase = (char *)DLSYM(DLLBase, MAKE_OFFSET(BASE));
+@@ -103,5 +107,6 @@ void OnAmxxAttach()
+ 
+ 	MFuncs_Initialize(FuncBase);
+ 	MPlayerFuncs_Initialize(FuncBase);
++#endif
+ }
+ 
+diff --git a/modules/ns/natives/general.cpp b/modules/ns/natives/general.cpp
+index 10ce4cc..7a94a9d 100644
+--- a/modules/ns/natives/general.cpp
++++ b/modules/ns/natives/general.cpp
+@@ -455,7 +455,8 @@ static cell AMX_NATIVE_CALL ns_get_gameplay(AMX* amx, cell* params)
+ 		avhgameplay = FIND_ENTITY_BY_CLASSNAME(NULL, "avhgameplay");
+ 	}
+ 	if (avhgameplay == NULL ||
+-		avhgameplay->pvPrivateData == NULL) // Still null? Get out of here
++		avhgameplay->pvPrivateData == NULL ||
++		MAKE_OFFSET(GAMEPLAY_TEAMA) < 0) // Still null? Get out of here
+ 	{
+ 		return NSGame_CantTell;
+ 	}
+diff --git a/modules/ns/natives/memberfuncs.cpp b/modules/ns/natives/memberfuncs.cpp
+index 4af84b2..cf6f002 100644
+--- a/modules/ns/natives/memberfuncs.cpp
++++ b/modules/ns/natives/memberfuncs.cpp
+@@ -44,6 +44,13 @@ static void *(*FP_GetGameRules)();
+ 
+ void MFuncs_Initialize(char *base)
+ {
++#if defined(__linux__)
++	set_mfp(MFP_Recycle,NS_Symbol("_ZN16AvHBaseBuildable12StartRecycleEv"));
++
++	set_mfp(MFP_WeldFinished,NS_Symbol("_ZN11AvHWeldable12AddBuildTimeEf"));
++
++	FP_GetGameRules=horrible_cast<void *(*)()>(NS_Symbol("_Z12GetGameRulesv"));
++#else
+ 	set_mfp(MFP_Recycle,MFP(MEMBER_RECYCLE));
+ 
+ 	set_mfp(MFP_WeldFinished,MFP(MEMBER_TRIGGER_WELDABLE));
+@@ -51,6 +58,7 @@ void MFuncs_Initialize(char *base)
+ 	// This is not a member function pointer, but use MFP since it
+ 	// uses the same address conversion as MFPs do
+ 	FP_GetGameRules=horrible_cast<void *(*)()>(MFP(GETGAMERULES));
++#endif
+ };
+ 
+ static cell AMX_NATIVE_CALL ns_recycle(AMX *amx, cell *params)
+@@ -71,6 +79,11 @@ static cell AMX_NATIVE_CALL ns_recycle(AMX *amx, cell *params)
+ 		return 0;
+ 	}
+ 
++	if (!MFP_Recycle)
++	{
++		return 0;
++	}
++
+ 	// Make sure it's a marine building, undefined stuff happens on alien structures
+ 	(reinterpret_cast<GenericClass *>(Entity->pvPrivateData)->*(MFP_Recycle))();
+ 	
+@@ -91,6 +104,11 @@ static cell AMX_NATIVE_CALL ns_finish_weldable(AMX *amx, cell *params)
+ 		return 0;
+ 	}
+ 
++	if (!MFP_WeldFinished || MAKE_OFFSET(WELD_DONE) < 0)
++	{
++		return 0;
++	}
++
+ 	// First need to set the weldable to 100% complete
+ 	set_private_f(Entity,MAKE_OFFSET(WELD_DONE),get_private_f(Entity,MAKE_OFFSET(WELD_TIME)));
+ 
+@@ -109,7 +127,7 @@ static cell AMX_NATIVE_CALL ns_get_teamres(AMX *amx, cell *params)
+ 	{
+ 		return 0;
+ 	}
+-	if (GameRules==NULL) // GameRules not initialized yet
++	if (GameRules==NULL && FP_GetGameRules!=NULL && MAKE_OFFSET(GAMERULES_TEAMA_RESOURCES) >= 0) // GameRules not initialized yet
+ 	{
+ 		GameRules=(*(FP_GetGameRules))();
+ 	}
+@@ -121,11 +139,11 @@ static cell AMX_NATIVE_CALL ns_get_teamres(AMX *amx, cell *params)
+ 	{
+ 	case 1:
+ 		{
+-			return amx_ftoc2(*(REAL *)((char *)GameRules+GAMERULES_TEAMA_RESOURCES));
++			return amx_ftoc2(*(REAL *)((char *)GameRules+MAKE_OFFSET(GAMERULES_TEAMA_RESOURCES)));
+ 		}
+ 	case 2:
+ 		{
+-			return amx_ftoc2(*(REAL *)((char *)GameRules+GAMERULES_TEAMB_RESOURCES));
++			return amx_ftoc2(*(REAL *)((char *)GameRules+MAKE_OFFSET(GAMERULES_TEAMB_RESOURCES)));
+ 		}
+ 	default:
+ 		{
+@@ -141,7 +159,7 @@ static cell AMX_NATIVE_CALL ns_set_teamres(AMX *amx, cell *params)
+ 	{
+ 		return 0;
+ 	}
+-	if (GameRules==NULL) // GameRules not initialized yet
++	if (GameRules==NULL && FP_GetGameRules!=NULL && MAKE_OFFSET(GAMERULES_TEAMA_RESOURCES) >= 0) // GameRules not initialized yet
+ 	{
+ 		GameRules=(*(FP_GetGameRules))();
+ 	}
+@@ -153,12 +171,12 @@ static cell AMX_NATIVE_CALL ns_set_teamres(AMX *amx, cell *params)
+ 	{
+ 	case 1:
+ 		{
+-			*(REAL *)((char *)GameRules+GAMERULES_TEAMA_RESOURCES)=amx_ctof2(params[2]);
++			*(REAL *)((char *)GameRules+MAKE_OFFSET(GAMERULES_TEAMA_RESOURCES))=amx_ctof2(params[2]);
+ 			return 1;
+ 		}
+ 	case 2:
+ 		{
+-			*(REAL *)((char *)GameRules+GAMERULES_TEAMB_RESOURCES)=amx_ctof2(params[2]);
++			*(REAL *)((char *)GameRules+MAKE_OFFSET(GAMERULES_TEAMB_RESOURCES))=amx_ctof2(params[2]);
+ 			return 1;
+ 		}
+ 	default:
+@@ -175,7 +193,7 @@ static cell AMX_NATIVE_CALL ns_add_teamres(AMX *amx, cell *params)
+ 	{
+ 		return 0;
+ 	}
+-	if (GameRules==NULL) // GameRules not initialized yet
++	if (GameRules==NULL && FP_GetGameRules!=NULL && MAKE_OFFSET(GAMERULES_TEAMA_RESOURCES) >= 0) // GameRules not initialized yet
+ 	{
+ 		GameRules=(*(FP_GetGameRules))();
+ 	}
+@@ -187,11 +205,11 @@ static cell AMX_NATIVE_CALL ns_add_teamres(AMX *amx, cell *params)
+ 	{
+ 	case 1:
+ 		{
+-			return amx_ftoc2(*(REAL *)((char *)GameRules+GAMERULES_TEAMA_RESOURCES)+=amx_ctof2(params[2]));
++			return amx_ftoc2(*(REAL *)((char *)GameRules+MAKE_OFFSET(GAMERULES_TEAMA_RESOURCES))+=amx_ctof2(params[2]));
+ 		}
+ 	case 2:
+ 		{
+-			return amx_ftoc2(*(REAL *)((char *)GameRules+GAMERULES_TEAMB_RESOURCES)+=amx_ctof2(params[2]));
++			return amx_ftoc2(*(REAL *)((char *)GameRules+MAKE_OFFSET(GAMERULES_TEAMB_RESOURCES))+=amx_ctof2(params[2]));
+ 		}
+ 	default:
+ 		{
+diff --git a/modules/ns/natives/player_memory.cpp b/modules/ns/natives/player_memory.cpp
+index f6fe5ac..bdf0f8e 100644
+--- a/modules/ns/natives/player_memory.cpp
++++ b/modules/ns/natives/player_memory.cpp
+@@ -28,7 +28,11 @@ static bool (GenericClass::*MFP_SetResearchDone)(int inMessageID, bool inState);
+ 
+ void MPlayerFuncs_Initialize(char *base)
+ {
++#if defined(__linux__)
++	set_mfp(MFP_SetResearchDone, NS_Symbol("_ZN11AvHTechTree15SetResearchDoneE12AvHMessageIDb"));
++#else
+ 	set_mfp(MFP_SetResearchDone, MFP(MEMBER_SET_RESEARCH_DONE));
++#endif
+ };
+ 
+ // Float:ns_get_res(Player)
+@@ -376,6 +380,11 @@ static cell AMX_NATIVE_CALL ns_remove_upgrade(AMX *amx, cell *params)
+ 	};
+ 
+ 
++	if (MAKE_OFFSET(UPGRADES_BOUGHT) < 0 || !MFP_SetResearchDone)
++	{
++		return 0;
++	}
++
+ 	upgradevector *bought = reinterpret_cast<upgradevector *>(reinterpret_cast<char *>(player->GetEdict()->pvPrivateData) + MAKE_OFFSET(UPGRADES_BOUGHT));
+ 	upgradevector *active = reinterpret_cast<upgradevector *>(reinterpret_cast<char *>(player->GetEdict()->pvPrivateData) + MAKE_OFFSET(UPGRADES_ACTIVE));
+ 
+diff --git a/modules/ns/natives/structure.cpp b/modules/ns/natives/structure.cpp
+index 9b65ef4..0001fb7 100644
+--- a/modules/ns/natives/structure.cpp
++++ b/modules/ns/natives/structure.cpp
+@@ -129,9 +129,9 @@ static cell AMX_NATIVE_CALL ns_build_structure(AMX *amx, cell *params)
+ undo_ghost:
+ 	if (StructureType==1) // marine, remove "ghost" appearance
+ 	{
+-		if (get_private(Entity,MAKE_OFFSET(GHOST_STRUCTURE))!=0)
++		if (get_private_b(Entity,MAKE_OFFSET(GHOST_STRUCTURE))!=0)
+ 		{
+-			set_private(Entity,MAKE_OFFSET(GHOST_STRUCTURE),0);
++			set_private_b(Entity,MAKE_OFFSET(GHOST_STRUCTURE),0);
+ 
+ 			Entity->v.rendermode=kRenderNormal;
+ 			Entity->v.renderamt=100.0;
+@@ -239,7 +239,7 @@ static cell AMX_NATIVE_CALL ns_get_obs_energy(AMX *amx, cell *params)
+ 		return 0;
+ 	}	
+ 
+-	return amx_ftoc2(get_private(Entity,MAKE_OFFSET(OBS_ENERGY)));
++	return amx_ftoc2(get_private_f(Entity,MAKE_OFFSET(OBS_ENERGY)));
+ };
+ // Float:ns_set_obs_energy(id,Float:energy);
+ static cell AMX_NATIVE_CALL ns_set_obs_energy(AMX *amx, cell *params)
+diff --git a/modules/ns/natives/weapons.cpp b/modules/ns/natives/weapons.cpp
+index 866543e..41f6708 100644
+--- a/modules/ns/natives/weapons.cpp
++++ b/modules/ns/natives/weapons.cpp
+@@ -314,6 +314,11 @@ static cell AMX_NATIVE_CALL ns_get_weapon(AMX *amx, cell *params)
+ 
+ 	// Finding weapon by ID
+ 
++	if (MAKE_OFFSET(PLAYER_ITEMS) < 0)
++	{
++		return 0;
++	}
++
+ 	char **pPlayerItems = reinterpret_cast<char**>(static_cast<char*>(player->GetEdict()->pvPrivateData) + MAKE_OFFSET(PLAYER_ITEMS));
+ 	char *pItem;
+ 	int weapon=params[2];
+diff --git a/modules/ns/ns.h b/modules/ns/ns.h
+index 7940794..7b437e1 100644
+--- a/modules/ns/ns.h
++++ b/modules/ns/ns.h
+@@ -67,7 +67,7 @@ typedef struct tagAMX_HEADER {
+ } PACKED AMX_HEADER;
+ 
+ // Don't enable this, it just adds some offset finding natives
+-#define DEVELOPER_BUILD
++// #define DEVELOPER_BUILD
+ 
+ 
+ #endif // NS_H
+diff --git a/modules/ns/ns_const.h b/modules/ns/ns_const.h
+index daea20b..1912cbf 100644
+--- a/modules/ns/ns_const.h
++++ b/modules/ns/ns_const.h
+@@ -167,6 +167,10 @@
+ 
+ #define GAMERULES_TEAMA_RESOURCES				GAMERULES_TEAMA_OFFSET + AVHTEAM_RESOURCES_OFFSET
+ #define GAMERULES_TEAMB_RESOURCES				GAMERULES_TEAMB_OFFSET + AVHTEAM_RESOURCES_OFFSET
++#define OFFSET_WIN_GAMERULES_TEAMA_RESOURCES	GAMERULES_TEAMA_RESOURCES
++#define OFFSET_LIN_GAMERULES_TEAMA_RESOURCES	GAMERULES_TEAMA_RESOURCES
++#define OFFSET_WIN_GAMERULES_TEAMB_RESOURCES	GAMERULES_TEAMB_RESOURCES
++#define OFFSET_LIN_GAMERULES_TEAMB_RESOURCES	GAMERULES_TEAMB_RESOURCES
+ 
+ 
+ enum
+diff --git a/modules/ns/ns_layout.cpp b/modules/ns/ns_layout.cpp
+new file mode 100644
+index 0000000..7fbfbed
+--- /dev/null
++++ b/modules/ns/ns_layout.cpp
+@@ -0,0 +1,279 @@
++// vim: set ts=4 sw=4 tw=99 noet:
++//
++// AMX Mod X, based on AMX Mod by Aleksander Naszko ("OLO").
++// Copyright (C) The AMX Mod X Development Team.
++//
++// This software is licensed under the GNU General Public License, version 3 or higher.
++// Additional exceptions apply. For full license details, see LICENSE.txt or visit:
++//     https://alliedmods.net/amxmodx-license
++
++//
++// Natural Selection Module
++//
++
++#if defined(__linux__)
++
++#include "sdk/amxxmodule.h"
++#include "ns_layout.h"
++
++#include <dlfcn.h>
++#include <link.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++int g_NSOffsets[NSF_COUNT];
++
++static void *NSHandle = NULL;
++
++// Each field is the sum of the named offsets (as ns.so.offsets lists them)
++// plus a constant
++struct NSFieldSource
++{
++	NSField field;
++	const char *name;
++	const char *plus;
++	int add;
++};
++
++static const NSFieldSource FieldSources[] =
++{
++	{ NSF_RESOURCES,		"AvHPlayer::mResources" },
++	{ NSF_EXP,				"AvHPlayer::mExperience" },
++	{ NSF_POINTS,			"AvHPlayer::mExperienceLevelsSpent" },
++	{ NSF_SCORE,			"AvHPlayer::mScore" },
++	{ NSF_HIVEABILITY,		"AvHPlayer::mNumHives" },
++	{ NSF_UPGRADES_BOUGHT,	"AvHPlayer::mPurchasedCombatUpgrades" },
++	{ NSF_UPGRADES_ACTIVE,	"AvHPlayer::mGiveCombatUpgrades" },
++	{ NSF_COMBAT_TECHTREE,	"AvHPlayer::mCombatNodes" },
++	{ NSF_DEATHS,			"AvHPlayer::m_iDeaths" },
++	// m_rgAmmo slots, in the order NS registers its ammo types
++	{ NSF_AMMO_LMG,			"AvHPlayer::m_rgAmmo", NULL, 2 * 4 },
++	{ NSF_AMMO_PISTOL,		"AvHPlayer::m_rgAmmo", NULL, 3 * 4 },
++	{ NSF_AMMO_SHOTGUN,		"AvHPlayer::m_rgAmmo", NULL, 4 * 4 },
++	{ NSF_AMMO_HMG,			"AvHPlayer::m_rgAmmo", NULL, 5 * 4 },
++	{ NSF_AMMO_GL,			"AvHPlayer::m_rgAmmo", NULL, 6 * 4 },
++	{ NSF_AMMO_HG,			"AvHPlayer::m_rgAmmo", NULL, 7 * 4 },
++	{ NSF_PLAYER_ITEMS,		"AvHPlayer::m_rgpPlayerItems" },
++	{ NSF_CURRENT_WEAPON,	"AvHPlayer::m_pActiveItem" },
++	{ NSF_LAST_WEAPON,		"AvHPlayer::m_pLastItem" },
++	{ NSF_WEAP_NEXT,		"AvHBasePlayerWeapon::m_pNext" },
++	{ NSF_WEAPID,			"AvHBasePlayerWeapon::m_iId" },
++	{ NSF_WEAPCLIP,			"AvHBasePlayerWeapon::m_iClip" },
++	{ NSF_WEAPRANGE,		"AvHBasePlayerWeapon::mRange" },
++	{ NSF_WEAPDMG,			"AvHBasePlayerWeapon::mDamage" },
++	{ NSF_STRUCTOWNER,		"AvHBaseBuildable::mBuilder" },
++	{ NSF_GHOST_STRUCTURE,	"AvHBaseBuildable::mGhost" },
++	{ NSF_OBS_ENERGY,		"AvHMarineBaseBuildable::mEnergy" },
++	{ NSF_HIVE_TRAIT,		"AvHHive::mTechnology" },
++	{ NSF_WELD_DONE,		"AvHWeldable::mTimeBuilt" },
++	{ NSF_WELD_TIME,		"AvHWeldable::mBuildTime" },
++	{ NSF_GAMEPLAY_TEAMA,	"AvHGameplay::mTeamAType" },
++	{ NSF_GAMEPLAY_TEAMB,	"AvHGameplay::mTeamBType" },
++	{ NSF_GAMERULES_TEAMA_RESOURCES,	"AvHGamerules::mTeamA", "AvHTeam::mTeamResources" },
++	{ NSF_GAMERULES_TEAMB_RESOURCES,	"AvHGamerules::mTeamB", "AvHTeam::mTeamResources" },
++};
++
++struct NSEntry
++{
++	char name[96];
++	long value;
++};
++
++static long FindEntry(const NSEntry *entries, int count, const char *name)
++{
++	for (int i = 0; i < count; i++)
++	{
++		if (strcmp(entries[i].name, name) == 0)
++		{
++			return entries[i].value;
++		}
++	}
++	return -1;
++}
++
++struct BuildIdSearch
++{
++	ElfW(Addr) address;	// anything inside the library
++	char hex[2 * 64 + 1];
++};
++
++// dl_iterate_phdr callback: the GNU build ID of the library that holds
++// search->address, from its PT_NOTE segments in memory
++static int FindBuildId(struct dl_phdr_info *info, size_t, void *data)
++{
++	BuildIdSearch *search = reinterpret_cast<BuildIdSearch *>(data);
++	bool found = false;
++
++	for (int i = 0; i < info->dlpi_phnum; i++)
++	{
++		const ElfW(Phdr) *ph = &info->dlpi_phdr[i];
++		ElfW(Addr) start = info->dlpi_addr + ph->p_vaddr;
++
++		if (ph->p_type == PT_LOAD && search->address >= start && search->address < start + ph->p_memsz)
++		{
++			found = true;
++		}
++	}
++	if (!found)
++	{
++		return 0;
++	}
++	for (int i = 0; i < info->dlpi_phnum; i++)
++	{
++		const ElfW(Phdr) *ph = &info->dlpi_phdr[i];
++
++		if (ph->p_type != PT_NOTE)
++		{
++			continue;
++		}
++
++		const char *note = reinterpret_cast<const char *>(info->dlpi_addr + ph->p_vaddr);
++		const char *end = note + ph->p_memsz;
++
++		while (note + sizeof(ElfW(Nhdr)) <= end)
++		{
++			const ElfW(Nhdr) *header = reinterpret_cast<const ElfW(Nhdr) *>(note);
++			const char *name = note + sizeof(ElfW(Nhdr));
++			const unsigned char *desc = reinterpret_cast<const unsigned char *>(name + ((header->n_namesz + 3) & ~3));
++
++			if (header->n_type == NT_GNU_BUILD_ID && header->n_namesz == 4 && memcmp(name, "GNU", 4) == 0)
++			{
++				for (unsigned int j = 0; j < header->n_descsz && j < 64; j++)
++				{
++					snprintf(search->hex + 2 * j, 3, "%02x", desc[j]);
++				}
++				return 1;
++			}
++			note = reinterpret_cast<const char *>(desc) + ((header->n_descsz + 3) & ~3);
++		}
++	}
++	return 1;
++}
++
++static bool LoadLayout()
++{
++	char path[256];
++
++	// The game library that metamod loaded (dlls/ns.so, addons/metamod/config.ini)
++	snprintf(path, sizeof(path), "%s/dlls/ns.so", MF_GetModname());
++	NSHandle = dlopen(path, RTLD_NOW | RTLD_NOLOAD);
++
++	if (NSHandle == NULL)
++	{
++		MF_Log("%s isn't loaded (%s)", path, dlerror());
++		return false;
++	}
++
++	BuildIdSearch search;
++	search.address = reinterpret_cast<ElfW(Addr)>(dlsym(NSHandle, "GiveFnptrsToDll"));
++	search.hex[0] = '\0';
++
++	if (search.address == 0 || dl_iterate_phdr(FindBuildId, &search) == 0 || search.hex[0] == '\0')
++	{
++		MF_Log("No GNU build ID in %s", path);
++		return false;
++	}
++
++	snprintf(path, sizeof(path), "%s/dlls/ns.so.offsets", MF_GetModname());
++	FILE *fp = fopen(path, "rt");
++
++	if (fp == NULL)
++	{
++		MF_Log("Can't open %s, which the ns-classic builder writes next to ns.so", path);
++		return false;
++	}
++
++	static NSEntry entries[128];
++	int count = 0;
++	char line[256], key[96], value[160], buildid[160] = "";
++
++	while (fgets(line, sizeof(line), fp) != NULL)
++	{
++		if (sscanf(line, "%95s %159s", key, value) != 2)
++		{
++			continue;
++		}
++		if (strcmp(key, "build_id") == 0)
++		{
++			snprintf(buildid, sizeof(buildid), "%s", value);
++		}
++		else if (count < 128)
++		{
++			snprintf(entries[count].name, sizeof(entries[count].name), "%s", key);
++			entries[count++].value = strtol(value, NULL, 10);
++		}
++	}
++	fclose(fp);
++
++	if (strcmp(buildid, search.hex) != 0)
++	{
++		MF_Log("%s is for ns.so build %s, but the loaded ns.so is build %s", path, buildid[0] ? buildid : "(none)", search.hex);
++		return false;
++	}
++
++	for (size_t i = 0; i < sizeof(FieldSources) / sizeof(FieldSources[0]); i++)
++	{
++		const NSFieldSource *source = &FieldSources[i];
++		long offset = FindEntry(entries, count, source->name);
++		long plus = source->plus ? FindEntry(entries, count, source->plus) : 0;
++
++		if (offset < 0 || plus < 0)
++		{
++			MF_Log("%s lacks %s", path, offset < 0 ? source->name : source->plus);
++			return false;
++		}
++		g_NSOffsets[source->field] = static_cast<int>(offset + plus + source->add);
++	}
++	for (int i = 0; i < NSF_COUNT; i++)
++	{
++		if (g_NSOffsets[i] < 0)
++		{
++			MF_Log("ns_layout.cpp has no source for field %d", i);
++			return false;
++		}
++	}
++
++	MF_Log("Using the field offsets in %s (ns.so build %s)", path, buildid);
++	return true;
++}
++
++bool NS_LoadLayout()
++{
++	for (int i = 0; i < NSF_COUNT; i++)
++	{
++		g_NSOffsets[i] = -1;
++	}
++
++	// CBaseEntity::pev, right after the vtable pointer
++	g_NSOffsets[NSF_ENTVAR] = 4;
++
++	if (LoadLayout())
++	{
++		return true;
++	}
++
++	for (int i = 0; i < NSF_COUNT; i++)
++	{
++		if (i != NSF_ENTVAR)
++		{
++			g_NSOffsets[i] = -1;
++		}
++	}
++
++	MF_Log("The natives that use NS memory are disabled (they return 0)");
++	return false;
++}
++
++void *NS_Symbol(const char *name)
++{
++	void *address = NSHandle ? dlsym(NSHandle, name) : NULL;
++
++	if (address == NULL)
++	{
++		MF_Log("Can't find %s in ns.so; the natives that call it are disabled", name);
++	}
++	return address;
++}
++
++#endif // __linux__
+diff --git a/modules/ns/ns_layout.h b/modules/ns/ns_layout.h
+new file mode 100644
+index 0000000..508997f
+--- /dev/null
++++ b/modules/ns/ns_layout.h
+@@ -0,0 +1,71 @@
++// vim: set ts=4 sw=4 tw=99 noet:
++//
++// AMX Mod X, based on AMX Mod by Aleksander Naszko ("OLO").
++// Copyright (C) The AMX Mod X Development Team.
++//
++// This software is licensed under the GNU General Public License, version 3 or higher.
++// Additional exceptions apply. For full license details, see LICENSE.txt or visit:
++//     https://alliedmods.net/amxmodx-license
++
++//
++// Natural Selection Module
++//
++// Linux: the layout of the running ns.so, instead of the NS 3.2 ns_i386.so
++// constants in ns_const.h. Field offsets come from dlls/ns.so.offsets, which
++// the ns-classic builder writes next to the ns.so it compiles (with that
++// ns.so's GNU build ID), and functions are looked up by their symbol.
++// An offset is -1 and a function NULL when it isn't known; the natives
++// that need it then do nothing and return 0.
++//
++
++#ifndef NS_LAYOUT_H
++#define NS_LAYOUT_H
++
++enum NSField
++{
++	NSF_ENTVAR,
++	NSF_RESOURCES,
++	NSF_EXP,
++	NSF_POINTS,
++	NSF_SCORE,
++	NSF_HIVEABILITY,
++	NSF_UPGRADES_BOUGHT,
++	NSF_UPGRADES_ACTIVE,
++	NSF_COMBAT_TECHTREE,
++	NSF_DEATHS,
++	NSF_AMMO_LMG,
++	NSF_AMMO_PISTOL,
++	NSF_AMMO_SHOTGUN,
++	NSF_AMMO_HMG,
++	NSF_AMMO_GL,
++	NSF_AMMO_HG,
++	NSF_PLAYER_ITEMS,
++	NSF_CURRENT_WEAPON,
++	NSF_LAST_WEAPON,
++	NSF_WEAP_NEXT,
++	NSF_WEAPID,
++	NSF_WEAPCLIP,
++	NSF_WEAPRANGE,
++	NSF_WEAPDMG,
++	NSF_STRUCTOWNER,
++	NSF_GHOST_STRUCTURE,
++	NSF_OBS_ENERGY,
++	NSF_HIVE_TRAIT,
++	NSF_WELD_DONE,
++	NSF_WELD_TIME,
++	NSF_GAMEPLAY_TEAMA,
++	NSF_GAMEPLAY_TEAMB,
++	NSF_GAMERULES_TEAMA_RESOURCES,
++	NSF_GAMERULES_TEAMB_RESOURCES,
++	NSF_COUNT
++};
++
++extern int g_NSOffsets[NSF_COUNT];
++
++// Reads the offsets; false (and all offsets -1) if they don't match ns.so
++bool NS_LoadLayout();
++
++// A function of the loaded ns.so by its (mangled) symbol, or NULL
++void *NS_Symbol(const char *name);
++
++#endif // NS_LAYOUT_H
+diff --git a/modules/ns/utilfunctions.h b/modules/ns/utilfunctions.h
+index 0b84e7c..d7fffb2 100644
+--- a/modules/ns/utilfunctions.h
++++ b/modules/ns/utilfunctions.h
+@@ -105,8 +105,13 @@ class CPlayer;
+ 
+ CPlayer *UTIL_PlayerByCID(int CID);
+ 
+-// Converts something such as RESOURCES into OFFSET_WIN_RESOURCES or OFFSET_LIN_RESOURCES
+-#if defined(__linux__) || defined(__APPLE__)
++// Converts something such as RESOURCES into OFFSET_WIN_RESOURCES or OFFSET_LIN_RESOURCES.
++// On Linux, the offset in the running ns.so (ns_layout.h), -1 if unknown;
++// the get/set/inc_private helpers then read 0 and write nothing.
++#if defined(__linux__)
++#include "ns_layout.h"
++#define MAKE_OFFSET(Offset) (g_NSOffsets[NSF_##Offset])
++#elif defined(__APPLE__)
+ #define MAKE_OFFSET(Offset) OFFSET_LIN_##Offset
+ #define MAKE_MEMBER_OFFSET(Offs) (Offs - OFFSET_LIN_MEMBERFUNCSTART)
+ #else
+@@ -117,6 +122,10 @@ CPlayer *UTIL_PlayerByCID(int CID);
+ template <typename Output>
+ inline Output get_private_p(edict_t *pEntity, int offset)
+ {
++	if (offset < 0)
++	{
++		return (Output)NULL;
++	}
+ 	return (Output)(*(void**)((char*)(pEntity->pvPrivateData)+offset));
+ };
+ 
+@@ -181,54 +190,102 @@ inline REAL clamp(REAL value, REAL min)
+ 
+ inline int get_private(edict_t *pEntity, int offset)
+ {
++	if (offset < 0)
++	{
++		return 0;
++	}
+ 	return *(int*)((char*)(pEntity->pvPrivateData)+offset);
+ }
+ 
+ inline REAL get_private_f(edict_t *pEntity, int offset)
+ {
++	if (offset < 0)
++	{
++		return 0;
++	}
+ 	return *(REAL*)((char*)(pEntity->pvPrivateData)+offset);
+ }
+ 
+ inline void set_private(edict_t *pEntity, int offset, int value)
+ {
++	if (offset < 0)
++	{
++		return;
++	}
+ 	*(int*)((char*)(pEntity->pvPrivateData)+offset) = value;
+ }
+ inline int inc_private(edict_t *pEntity, int offset, int value)
+ {
++	if (offset < 0)
++	{
++		return 0;
++	}
+ 	return *(int*)((char*)(pEntity->pvPrivateData)+offset) = *(int*)((char*)(pEntity->pvPrivateData)+offset) + value;
+ }
+ inline int inc_private(edict_t *pEntity, int offset, int value, int min)
+ {
++	if (offset < 0)
++	{
++		return 0;
++	}
+ 	return *(int*)((char*)(pEntity->pvPrivateData)+offset) = clamp(*(int*)((char*)(pEntity->pvPrivateData)+offset) + value, min);
+ }
+ inline int inc_private(edict_t *pEntity, int offset, int value, int min, int max)
+ {
++	if (offset < 0)
++	{
++		return 0;
++	}
+ 	return *(int*)((char*)(pEntity->pvPrivateData)+offset) = clamp(*(int*)((char*)(pEntity->pvPrivateData)+offset) + value, min, max);
+ }
+ 
+ inline void set_private_f(edict_t *pEntity, int offset, REAL value)
+ {
++	if (offset < 0)
++	{
++		return;
++	}
+ 	*(REAL*)((char*)(pEntity->pvPrivateData)+offset) = value;
+ }
+ inline REAL inc_private_f(edict_t *pEntity, int offset, REAL value)
+ {
++	if (offset < 0)
++	{
++		return 0;
++	}
+ 	return *(REAL*)((char*)(pEntity->pvPrivateData)+offset) = *(REAL*)((char*)(pEntity->pvPrivateData)+offset) + value;
+ }
+ inline REAL inc_private_f(edict_t *pEntity, int offset, REAL value, REAL min)
+ {
++	if (offset < 0)
++	{
++		return 0;
++	}
+ 	return *(REAL*)((char*)(pEntity->pvPrivateData)+offset) = clamp(*(REAL*)((char*)(pEntity->pvPrivateData)+offset) + value, min);
+ }
+ inline REAL inc_private_f(edict_t *pEntity, int offset, REAL value, REAL min, REAL max)
+ {
++	if (offset < 0)
++	{
++		return 0;
++	}
+ 	return *(REAL*)((char*)(pEntity->pvPrivateData)+offset) = clamp(*(REAL*)((char*)(pEntity->pvPrivateData)+offset) + value, min, max);
+ }
+ 
+ inline unsigned char get_private_b(edict_t *pEntity, int offset)
+ {
++	if (offset < 0)
++	{
++		return 0;
++	}
+ 	return *(((unsigned char*)pEntity->pvPrivateData)+offset);
+ };
+ inline unsigned char set_private_b(edict_t *pEntity, int offset, unsigned char value)
+ {
++	if (offset < 0)
++	{
++		return 0;
++	}
+ 	return *(((unsigned char*)pEntity->pvPrivateData)+offset)=value;
+ };
+ 
