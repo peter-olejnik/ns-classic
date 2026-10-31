@@ -102,5 +102,17 @@ RUN printf '%s %s\n' \
       if ldd "$f" | grep 'not found'; then echo "$f: missing libraries" >&2; exit 1; fi; \
     done
 
+# Custom plugins: every scripting/*.sma, compiled with the compiler and
+# includes built above (plus scripting/include), and prebuilt/*.amxx (old
+# plugins without source) as they are. Then plugins.ini, which
+# enables or disables each plugin, as configs/plugins.ini. A script that
+# doesn't compile is left out and listed in scripting/ns-classic-compile.txt.
+FROM package AS scripts
+COPY --chmod=755 compile.sh /usr/local/bin/compile-plugins
+COPY scripting/ /src/scripting/
+COPY prebuilt/ /src/prebuilt/
+COPY plugins.ini /src/plugins.ini
+RUN compile-plugins /src/scripting /src/prebuilt /src/plugins.ini /ns/addons/amxmodx
+
 FROM scratch AS export
-COPY --from=package /ns /ns
+COPY --from=scripts /ns /ns

@@ -13,6 +13,10 @@
 #   AMBUILD_GIT_REF, HLSDK_GIT_REF, METAMOD_HL1_GIT_REF       (default: master)
 # The commits used are in addons/amxmodx/ns-classic-sources.txt.
 #
+# It also compiles the custom plugins in plugins/amxmodx/scripting/*.sma
+# (plus prebuilt/*.amxx as they are), and installs plugins/amxmodx/plugins.ini,
+# which enables or disables each plugin, as configs/plugins.ini.
+#
 # Uses podman if available, otherwise docker; override with CONTAINER_ENGINE.
 #
 # Usage: plugins/amxmodx/build.sh [extra build args...]
@@ -62,4 +66,7 @@ mkdir -p "$(dirname "$out_dir")"
 "$engine" cp "$container:/ns" "$out_dir"
 
 echo "Exported: $out_dir"
+# The custom plugins (scripting/*.sma): how many compiled, and which didn't
+head -n 2 "$out_dir/addons/amxmodx/scripting/ns-classic-compile.txt"
+echo "Compiler errors: $out_dir/addons/amxmodx/scripting/ns-classic-compile.txt"
 echo "Add it to the server image with: PLUGINS=amxmodx hosting/build.sh"

@@ -13,3 +13,6 @@ NUL
 
 # Saved choices of ./setup.sh (no secrets)
 plan.env
+
+# Local backups (e.g. an old server's addons/, with users.ini and logs)
+_tmp/

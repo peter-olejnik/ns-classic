@@ -8,3 +8,6 @@ plugins/*/patches/*.patch -text
 
 # Bot navmeshes (content/navmeshes) are binary
 *.nav binary
+
+# Compiled AMX Mod X plugins (plugins/amxmodx/prebuilt)
+*.amxx binary
