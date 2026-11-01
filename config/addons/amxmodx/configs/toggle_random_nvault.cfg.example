@@ -1,0 +1,46 @@
+// Drop this file in your AMXx configs directory for the toggle random plugin to load
+// and work correctly.
+
+//=======================================================================================
+// Connect command - Modify to contain your connection details
+//=======================================================================================
+
+// Example - amx_random_connect playerstats
+amx_random_connect randomteams
+
+//=======================================================================================
+// Plugin CVAR's - Change these to suit your setup
+//=======================================================================================
+
+// Amount of time (seconds) that F4'ing is blocked at the start of each game
+sv_random_nof4 180
+
+// Delay (seconds) after map load that team joining is blocked before the randoming process
+sv_random_nojoin 17
+
+// Duration (minutes) that random teams will be turned on for after a successful vote
+sv_random_votetime 45
+
+// Percentage of votes needed for vote to turn on random teams to be successful
+sv_random_votesneeded 0.3		// range of values is 0.0 (0%) > 1.0 (100%)
+
+// Duration of the vote (seconds)
+sv_random_votetime 300
+
+// Delay (seconds) after round has ended until the next forced random
+sv_random_resetdelay 30	 		// IMPORTANT - MUST BE NO LESS THAN 30 SECONDS
+
+// Decide whether random teams will switch on or off when admins join or leave
+// N.B - This value will be overridden by the plugin if sv_random_permanent > 0
+sv_random_admincheck 0 			// 0 - Off
+						// 1 - On
+
+// Override default plugin behaviour the CVAR below (ie, permanently on or off)
+sv_random_permanent 0			// 0 - Plugin uses default toggling behaviour
+						// 1 - On, random teams permanently on
+						// 2 - Off, random teams permanently off
+								
+// Decide which forcejoin method to use when random teams are off
+sv_random_forcejoin 0			// 0 - Forcejoin off
+						// 1 - Stats based
+						// 2 - Pure random

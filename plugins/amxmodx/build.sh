@@ -14,8 +14,9 @@
 # The commits used are in addons/amxmodx/ns-classic-sources.txt.
 #
 # It also compiles the custom plugins in plugins/amxmodx/scripting/*.sma
-# (plus prebuilt/*.amxx as they are), and installs plugins/amxmodx/plugins.ini,
-# which enables or disables each plugin, as configs/plugins.ini.
+# (plus prebuilt/*.amxx as they are). The configs, including metamod's and
+# the plugin list (which plugins load), are in config/addons/ at the repo
+# root; hosting/build.sh adds them to the server image.
 #
 # Uses podman if available, otherwise docker; override with CONTAINER_ENGINE.
 #

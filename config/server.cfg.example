@@ -1,15 +1,15 @@
 // Server config for the NS server image. To customize it:
 //
-//   1. Copy this file to hosting/server.cfg. hosting/build.sh does this for you
-//      on its first run. server.cfg is gitignored, so your changes stay local.
-//   2. Edit hosting/server.cfg.
+//   1. Copy this file to config/server.cfg (./setup.sh does this when it sets
+//      the hostname or bots). It is gitignored, so your changes stay local.
+//   2. Edit config/server.cfg.
 //   3. Rebuild and restart:  hosting/build.sh && cd hosting && podman compose up -d
 //
 // It replaces ns/server.cfg from dist/server/ns in the image. The server runs it
 // on every map change (see mapchangecfgfile below).
 //
 // Don't put rcon_password or sv_password here. Set RCON_PASSWORD and
-// SV_PASSWORD in hosting/.env, so they never end up in the image.
+// SV_PASSWORD in config/.env, so they never end up in the image.
 //
 // Custom maps download slowly from HLDS itself. For fast downloads, host the
 // files over HTTP and add:  sv_downloadurl "http://example.com/ns/"

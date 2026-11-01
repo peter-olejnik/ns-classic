@@ -1,9 +1,10 @@
 ; AMX Mod X plugins for the ns-classic server: which plugins load.
 ;
-; One plugin per line; a leading ";" disables it. plugins/amxmodx/build.sh
-; installs this file as addons/amxmodx/configs/plugins.ini (rebuild, then
-; PLUGINS=amxmodx hosting/build.sh). For one server only, put your own copy
-; in hosting/overlay/addons/amxmodx/configs/plugins.ini instead.
+; One plugin per line; a leading ";" disables it. hosting/build.sh installs
+; this file as addons/amxmodx/configs/plugins.ini in the server image
+; (PLUGINS=amxmodx hosting/build.sh). To change it for your server, copy it
+; to config/addons/amxmodx/configs/plugins.ini (gitignored) and edit that;
+; your copy wins.
 ;
 ; The stock plugins come with AMX Mod X; the others are compiled from
 ; plugins/amxmodx/scripting/*.sma (or, with no source, copied from

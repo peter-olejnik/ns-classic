@@ -1,0 +1,132 @@
+CYBERNETICS		1		// Set to "0" to disable the Cybernetics upgrade
+REINFORCEARMOR		1		// Set to "0" to disable the Reinforced Armor upgrade
+NANOARMOR		1		// Set to "0" to disable the Nano Armor upgrade
+ADVAMMOPACK		1		// Set to "0" to disable the Advanced Ammopack upgrade
+STATICFIELD		1		// Set to "0" to disable the Static Field upgrade
+WELDOVERBASE		1		// Set to "0" to disable normal welders from welding above the base max armor when the target has Reinforced Armor
+URANUIMAMMO		1		// Set to "0" to disable the Uranium Ammunition upgrade
+
+THICKSKIN		1		// Set to "0" to disable the Thickened Skin upgrade
+ETHSHIFT		1		// Set to "0" to disable the Ethereal Shift upgrade
+BLOODLUST		1		// Set to "0" to disable the Blood Lust upgrade
+HUNGER			1		// Set to "0" to disable the Hunger upgrade
+ACIDICVENGEANCE		1		// Set to "0" to disable the Acidic Vengeance upgrade
+SENSEOFANCIENTS		1		// Set to "0" to disable the Sense of Ancients upgrade
+
+// upgrade costs
+CYBERNETICSCOST		1		// Set to the amount of points you want Cybernetics to cost
+REINFORCEARMORCOST	1		// Set to the amount of points you want Reinforced Armor to cost
+NANOARMORCOST		1		// Set to the amount of points you want Nano Armor to cost
+ADVAMMOPACKCOST		1		// Set to the amount of points you want Advanced Ammopack to cost
+STATICFIELDCOST		1		// Set to the amount of points you want Static Field to cost
+URANUIMAMMOCOST		1		// Set to the amount of points you want Uranium Ammunition to cost
+
+THICKSKINCOST		1		// Set to the amount of points you want Thickened Skin to cost
+ETHSHIFTCOST		1		// Set to the amount of points you want Ethereal Shift to cost
+BLOODLUSTCOST		1		// Set to the amount of points you want Blood Lust to cost
+HUNGERCOST		1		// Set to the amount of points you want Hunger to cost
+ACIDICVENGEANCECOST	1		// Set to the amount of points you want Acidic Vengeance to cost
+SENSEOFANCIENTSCOST	1		// Set to the amount of points you want Sense of Ancients to cost
+
+// upgrade max level
+CYBERNETICSMAX		6		// Set to the max level of the Cybernetics upgrade you want possible
+REINFORCEARMORMAX	5		// Set to the max level of the Rienforced Armor upgrade you want possible
+NANOARMORMAX		5		// Set to the max level of the Nano Armor upgrade you want possible
+ADVAMMOPACKMAX		5		// Set to the max level of the Advanced Ammopack upgrade you want possible
+STATICFIELDMAX		5		// Set to the max level of the Static Field upgrade you want possible
+URANUIMAMMOMAX		5		// Set to the max level of the Uranium Ammunition upgrade you want possible
+
+THICKENEDSKINMAX	6		// Set to the max level of the Thickened Skin upgrade you want possible
+ETHSHIFTMAX		5		// Set to the max level of the Ethereal Shift upgrade you want possible
+BLOODLUSTMAX		5		// Set to the max level of the Blood Lust upgrade you want possible
+HUNGERMAX		5		// Set to the max level of the Hunger upgrade you want possible
+ACIDICVENGEANCEMAX	5		// Set to the max level of the Acidic Vengeance upgrade you want it to be
+SENSEOFANCIENTSMAX	6		// Set to the max level of the Sense of Ancients upgrade you want possible
+
+// CYBERNETICS options
+CYBERNETICSLEVEL	5		// Required player level to get the Cybernetics upgrade
+SPEED_MA		15		// Amount of speed normal marines and jet-packers get per level of cybernetics
+SPEED_HA		8		// Amount of speed heavy marines get per level of cybernetics
+
+// REINFORCEARMOR options
+REINFORCEARMORLEVEL	0		// Required player level to get the Reinforced Armor upgrade
+ARMOR_MA		10		// Amount of armor normal marines and jet-packers get per level of reinforced armor
+ARMOR_HA		20		// Amount of armor heavy marines get per level of reinforced armor
+
+// NANOARMOR options
+NANOARMORLEVEL		0		// Required player level to get the Nano Armor upgrade
+NANOARMOR_MA		2		// Amount of armor normal marines and jet-packers self-weld per second per level of nano armor
+NANOARMOR_HA		4		// Amount of armor heavy marines self-weld per second per level of nano armor
+
+// ADVAMMOPACK options
+ADVAMMOPACKLEVEL	0		// Required player level to get the Advanced Ammopack upgrade
+ADVAMMOPACK_PISTOL	2.0		// Amount of ammo players get per level for Pistol (do not use settings like 2.5, this is GL only)
+ADVAMMOPACK_LMG		6.0		// Amount of ammo players get per level for LMG (do not use settings like 5.5, this is GL only)
+ADVAMMOPACK_SHOTGUN	1.0		// Amount of ammo players get per level for Shotgun (do not use settings like 1.5, this is GL only)
+ADVAMMOPACK_HMG		16.0		// Amount of ammo players get per level for HMG (do not use settings like 10.5, this is GL only)
+ADVAMMOPACK_GL		0.5		// Amount of ammo players get per level for GL
+
+// STATICFIELD options
+STATICFIELDLEVEL	0		// Required player level to get the Static Field upgrade
+STATICFIELDINITIALRANGE	200		// Amount of range the Static Field upgrade starts out with
+STATICFIELDLEVELRANGE	40		// Amount of range the Static Field upgrade gains per level
+STATICFIELDNUMERATORLV	1		// The increase in numerator for the Static Field upgrade per level
+STATICFIELDDENOMENATOR	8		// The denomenator in the Static Field fraction
+MAXSTATICNUMERATOR	5		// The maximum numerator for the Static Field fraction, I suggest keeping it at 5 or below to prevent aliens becoming too weak
+
+// URANUIMAMMO options
+URANUIMAMMO_BULLET	10		// Amount of percent the Bullets damage will be improved each level
+URANUIMAMMO_GREN	7		// Amount of percent the Grenades damage will be improved each level
+
+// THICKSKIN options
+THICKENEDSKINLEVEL	0		// Required player level to get the Thickened Skin upgrade
+HEALTHSKULK		15.0		// Amount of health Skulk's get per level of Thickened Skin
+HEALTHGORGE		50.0		// Amount of health Gorge's get per level of Thickened Skin
+HEALTHLERK		20.0		// Amount of health Lerk's get per level of Thickened Skin
+HEALTHFADE		25.0		// Amount of health Fade's get per level of Thickened Skin
+HEALTHONOS		40.0		// Amount of health Oni get per level of Thickened Skin
+HEALTHGESTATE		100.0		// Amount of health Embryo's get per level of Thickened Skin
+
+// ETHSHIFT options
+ETHSHIFTLEVEL		5		// Required player level to get the Ethereal Shift upgrade
+SHIFTINITIAL		1.0		// Amount of initial invisibility time for Ethereal Shift (seconds)
+SHIFTLEVEL		0.3		// Amount of invisibility time that is added to the initial amount for every level gained in Ethereal Shift after 1st (seconds)
+SHIFTCLASSMULTI		3		// Set to how much a Skulk's, Lerk's and Gorge's SHIFTLEVEL should be increased (default 2 times longer shift than fade or onos)
+ONOS_SHIFT		1		// Set to "0" to disable Ethernal Shift for Onos
+SHIFTDELAY		2.0		// Amount of time player needs to wait till he can do Ethereal Shift again
+
+// BLOODLUST options
+BLOODLUSTLEVEL		0		// Required player level to get the Blood Lust upgrade
+BLOODLUSTSPEED		4		// Amount of energy added every 0.1 seconds per level of Blood Lust (note that the normal energy gain speed is ~7 and with adrenaline ~15)
+
+// HUNGER options
+HUNGERLEVEL		10		// Required player level to get the Hunger upgrade
+HUNGERSPEED		6		// Amount of speed an alien gets per kill per level of hunger for the time that the hunger bonus last
+HUNGERHEALTH		10		// Percent of max health that is added to the alien's current health per level (when it kills something)
+HUNGERINITIALTIME	3.0		// Amount of initial time that the Hunger upgrade's bonuses last (seconds)
+HUNGERLEVELTIME		1.0		// Amount of time that is added to the initial Hunger upgrade's bonus time (seconds)
+
+// ACIDICVENGEANCE options
+ACIDICVENGEANCELEVEL	0		// Required player level to get the Acidic Vengeance upgrade
+AV_MA_HP		12.0		// Amount of HP enemy loses per level for normal Marine and JP
+AV_MA_AP		12.0		// Amount of HP enemy loses per level for normal Marine and JP
+AV_HA_HP		12.0		// Amount of HP enemy loses per level for Heavy Armor
+AV_HA_AP		22.0		// Amount of AP enemy loses per level for Heavy Armor
+AV_GORGE_GEST_MULTI	1.5		// Multiplier for gorge and gestate. HP and AP values will be multiplied by this one (set to 1.0 for no advantage)
+
+// SENSEOFANCIENTS options
+SOA_PARASITE_INIT	10		// Amount of percent the SoA upgrade for Skulks starts out with
+SOA_PARASITE_ADD	10		// Amount of percent the SoA upgrade for Skulks gains per level
+SOA_PARASITE_DMG	10		// Amount of percent the Parasite will be improved each level
+SOA_HEALSPRAY_DMG	35		// Amount of percent the Healspray will be improved each level
+SOA_GASDAMAGE		10		// Amount of damage Marines with HA get by gas
+SOA_BLINK_ENERGY_BONUS	20		// Amount of percent the Blink's energy requirement will be reduced each level
+SOA_DEVOUR_ADDER	5		// Amount of levels needed to devour one more player (starting with level 1, eg: setting to 5 means with level 1, 6, 11,... one more player)^
+SOA_DEVOURTIME_INIT	1.5		// Amount of time player needs to wait to enable 2nd Devour (initial time)
+SOA_DEVOURTIME_BONUS	0.2		// Amount of time decreasing the time to wait for 2nd Devour each level
+SOA_GESTATE_ARMOR_ADD	30		// Amount of Armor bonus a gestating alien gets each level
+
+// Adjust level needed for each level (starting with 11)
+CUSTOM_LEVELS			0	// Set this to "1" to use the configs below
+BASE_XP_TO_NEXT_LEVEL		500.0	// XP needed to get to next level (level 10 = 2700 XP + 500 + NEXT_LEVEL_XP_MODIFIER = level 11)
+NEXT_LEVEL_XP_MODIFIER		50.0	// XP that is added to BASE_XP_TO_NEXT_LEVEL each level up (eg: level 11 => 2700 + 500 + 50 => level 12 / level 12 => 3250 + 500 + 50 + 50 => level 13)

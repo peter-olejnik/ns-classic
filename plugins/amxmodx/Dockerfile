@@ -80,12 +80,13 @@ RUN CC="gcc -Wno-return-local-addr" CXX=g++ python3 ../configure.py --enable-opt
     test -f packages/ns/addons/amxmodx/modules/ns_amxx_i386.so
 
 # The overlay: AMXX's base package, then its ns package (NS configs, plugins
-# and module) over it, metamod and its configs
+# and module) over it, and metamod. Metamod's configs (config.ini,
+# plugins.ini, which loads AMXX) and the plugin list are in config/ at the
+# repo root; hosting/build.sh adds them to the server image.
 FROM toolchain AS package
 COPY --from=amxmodx /src/amxmodx/build/packages/base/ /ns/
 COPY --from=amxmodx /src/amxmodx/build/packages/ns/ /ns/
 COPY --from=metamod /src/metamod-p/metamod/opt.linux_i386/metamod.so /ns/addons/metamod/dlls/
-COPY files/ /ns/
 ARG METAMOD_GIT_URL=https://github.com/Bots-United/metamod-p.git
 ARG METAMOD_COMMIT
 ARG AMXMODX_GIT_URL=https://github.com/alliedmodders/amxmodx.git
@@ -104,15 +105,14 @@ RUN printf '%s %s\n' \
 
 # Custom plugins: every scripting/*.sma, compiled with the compiler and
 # includes built above (plus scripting/include), and prebuilt/*.amxx (old
-# plugins without source) as they are. Then plugins.ini, which
-# enables or disables each plugin, as configs/plugins.ini. A script that
-# doesn't compile is left out and listed in scripting/ns-classic-compile.txt.
+# plugins without source) as they are. A script that doesn't compile is left
+# out and listed in scripting/ns-classic-compile.txt. Which plugins load is
+# config/addons/amxmodx/configs/plugins.ini.example (added by hosting/).
 FROM package AS scripts
 COPY --chmod=755 compile.sh /usr/local/bin/compile-plugins
 COPY scripting/ /src/scripting/
 COPY prebuilt/ /src/prebuilt/
-COPY plugins.ini /src/plugins.ini
-RUN compile-plugins /src/scripting /src/prebuilt /src/plugins.ini /ns/addons/amxmodx
+RUN compile-plugins /src/scripting /src/prebuilt /ns/addons/amxmodx
 
 FROM scratch AS export
 COPY --from=scripts /ns /ns

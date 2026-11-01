@@ -1,8 +1,7 @@
 #!/bin/sh
-# Compiles the custom plugins and installs the plugin list (Dockerfile,
-# "scripts" stage):
+# Compiles the custom plugins (Dockerfile, "scripts" stage):
 #
-#   compile.sh <scripting dir> <prebuilt dir> <plugins.ini> <amxmodx dir>
+#   compile.sh <scripting dir> <prebuilt dir> <amxmodx dir>
 #
 # Every <scripting dir>/*.sma is compiled with the AMXX compiler and includes
 # in <amxmodx dir>/scripting, plus <scripting dir>/include, into
@@ -13,14 +12,14 @@
 # <prebuilt dir>/*.amxx are plugins with no source, installed as they are
 # (first, so a compiled .sma of the same name replaces one).
 #
-# <plugins.ini> becomes configs/plugins.ini. An enabled entry whose .amxx
-# wasn't built is commented out with "[not built]", so AMXX doesn't log a
-# load failure for it every map.
+# The plugin list (which plugins load) is config/addons/amxmodx/configs/
+# plugins.ini.example, installed by hosting/build.sh; there, entries whose
+# .amxx wasn't built are commented out (hosting/scripts/plugin-lists.sh).
 #
 # The report, with each failed script's compiler output, is
 # <amxmodx dir>/scripting/ns-classic-compile.txt.
 set -eu
-src=$1 prebuilt=$2 ini=$3 amxx=$4
+src=$1 prebuilt=$2 amxx=$3
 sc="$amxx/scripting"
 report="$sc/ns-classic-compile.txt"
 logs=$(mktemp -d)
@@ -59,20 +58,6 @@ done
     done
   fi
 } > "$report"
-
-# The plugin list; enabled entries without a built .amxx are commented out
-awk -v dir="$amxx/plugins" '
-  {
-    line = $0; sub(/\r$/, "", line)
-    if (match(line, /^[ \t]*[^; \t]+\.amxx/)) {
-      file = substr(line, RSTART, RLENGTH); gsub(/^[ \t]+/, "", file)
-      if (system("test -f \"" dir "/" file "\"") != 0) {
-        print ";" line "\t; [not built]"
-        next
-      }
-    }
-    print line
-  }' "$ini" > "$amxx/configs/plugins.ini"
 
 rm -rf "$logs"
 cat "$report"

@@ -3,7 +3,10 @@
 #   cd hosting && podman compose up -d      (or docker compose)
 #   podman compose --profile hltv up -d     also start the HLTV proxy
 #
-# Settings: .env.default, overridden by an optional .env (see .env.default).
+# Settings: config/.env.default, overridden by an optional config/.env (see
+# config/.env.default). The port mappings come from hosting/.env, which
+# hosting/build.sh writes from those two (after changing a port without
+# rebuilding, run `hosting/build.sh env`).
 
 name: ns-classic
 
@@ -12,9 +15,13 @@ x-server: &server
   pull_policy: never
   restart: unless-stopped
   env_file:
-    - path: .env.default
-    - path: .env
+    - path: ../config/.env.default
+    - path: ../config/.env
       required: false
+  # The same values as the port mappings (hosting/.env), over env_file
+  environment:
+    HLDS_PORT: ${HLDS_PORT:-27016}
+    HLTV_PORT: ${HLTV_PORT:-27020}
 
 services:
   hlds:

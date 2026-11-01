@@ -1,0 +1,27 @@
+;List plugins that should be paused while VIP mod is running
+imessage.amxx
+combat_buildings.amxx
+latejoin.amxx
+spawninvfun.amxx
+stacksplit.amxx
+spechide.amxx
+Admin_Weapons.amxx
+ava_enable.amxx
+mvm_allinone.amxx
+glow.amxx
+classctrl.amxx
+gllimiter.amxx
+onilimiter.amxx
+amx_exec.amxx
+ratescheck.amxx
+admin_aimmenu.amxx
+cheat.amxx
+votemap_delay.amxx
+hpap.amxx
+comall.amxx
+me_gorgerecycle.amxx
+commannouce.amxx
+comm_dk_slap.amxx
+kickball.amxx
+adminxp.amxx
+extralevels3.amxx

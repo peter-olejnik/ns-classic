@@ -16,3 +16,11 @@ plan.env
 
 # Local backups (e.g. an old server's addons/, with users.ini and logs)
 _tmp/
+
+# config/: only the defaults (*.example, .env.default) and the README are
+# committed; every other file there is your own (see config/README.md)
+/config/**
+!/config/**/
+!/config/**/*.example
+!/config/.env.default
+!/config/README.md

@@ -18,11 +18,10 @@ The goal is to build the NS mod binaries from source and run a dedicated server 
 | `ns_maps/` | A dumping ground for custom maps and anything they might need, in any layout: archives, loose files, mirrored download sites. Every `.bsp` is merged as a map, along with only the files those maps need. |
 | `content/` | Committed content you make for the server, laid out like the mod directory, e.g. bot navmeshes in `content/navmeshes/<map>.nav`. `mapmerge/merge.sh` copies it into `dist/server/ns/` last, so it wins over the stock files and the merged maps. |
 | `navgen/` | A headless bot navmesh generator (NavEditor's Build and Save steps), built in a container. Its output goes to `dist/navmeshes/`. `mapmerge/merge.sh --navgen` runs it for maps without a navmesh. See [Generating navmeshes](#generating-navmeshes-navgen). |
-| `plugins/` | Server plugins, each built from source in a container to `dist/plugins/<name>/`, and added to the image with `PLUGINS=<name> hosting/build.sh`. So far: `amxmodx/` (AMX Mod X with Metamod-P, plus the old server's custom plugins in `amxmodx/scripting/` and the on/off list `amxmodx/plugins.ini`). See [Plugins: AMX Mod X](#plugins-amx-mod-x). |
+| `plugins/` | Server plugins, each built from source in a container to `dist/plugins/<name>/`, and added to the image with `PLUGINS=<name> hosting/build.sh`. So far: `amxmodx/` (AMX Mod X with Metamod-P, plus the old server's custom plugins in `amxmodx/scripting/`; their configs and on/off list are in `config/addons/`). See [Plugins: AMX Mod X](#plugins-amx-mod-x). |
 | `mapmerge/` | The container that analyzes `ns_maps/` against `dist/ns/` and merges it according to `rules.toml`. Scripts: `analyze.sh` and `merge.sh`. Its output goes to `dist/server/ns/`, `dist/maps/` and `dist/mapmerge/`. |
 | `hosting/` | The dedicated server image (`Dockerfile`, `build.sh`) and stack (`compose.yaml`): HLDS installed with SteamCMD, plus `dist/server/ns/`. Runs HLDS, log/demo rotation and, optionally, HLTV. |
-| `hosting/server.cfg`, `hosting/motd.txt` | Your server config and message of the day, created from the committed `.example` files and copied over `ns/` in the image. |
-| `hosting/overlay/` | Any other files to copy over `ns/` in the image (`mapcycle.txt`, `banned.cfg`, ...). |
+| `config/` | **Every config in one place**, laid out like the mod directory: container settings and passwords (`.env`), `server.cfg`, `motd.txt`, Metamod's and AMX Mod X's configs (`addons/`), and the plugin list. Committed defaults are `*.example`; your copies without `.example` are gitignored and win. See [Configs](#configs-config) and `config/README.md`. |
 
 ## Current status
 
@@ -55,7 +54,7 @@ Requirements: Podman or Docker, with Compose (`podman compose` or `docker compos
 ./setup.sh show     # print the saved plan and the steps it would run
 ```
 
-`setup.sh` asks what you want: the container engine, whether to build the server binary, stock or custom maps, navmesh generation, the server image, starting the server, and HLTV. It can also set the server name, port, player limit, start map, mapcycle, bots, and the RCON and join passwords. Press Enter to keep the current answer, which is marked with `*`. The answers are saved in `plan.env` (gitignored, no passwords), and the next run uses them as the defaults. The script then runs the steps below for you. Settings go where the server already reads them: the port, the `HLDS_OPTS` options and the passwords go in `hosting/.env`, and the hostname and `mp_botsenabled` go in `hosting/server.cfg`. On Windows, run it from Git Bash or WSL.
+`setup.sh` asks what you want: the container engine, whether to build the server binary, stock or custom maps, navmesh generation, the server image, starting the server, and HLTV. It can also set the server name, port, player limit, start map, mapcycle, bots, and the RCON and join passwords. Press Enter to keep the current answer, which is marked with `*`. The answers are saved in `plan.env` (gitignored, no passwords), and the next run uses them as the defaults. The script then runs the steps below for you. Settings go where the server already reads them: the port, the `HLDS_OPTS` options and the passwords go in `config/.env`, and the hostname and `mp_botsenabled` go in `config/server.cfg`. On Windows, run it from Git Bash or WSL.
 
 The steps are the scripts below, so you can still run any of them by hand. The full pipeline is:
 
@@ -71,7 +70,7 @@ podman compose up -d      # or docker compose; add --profile hltv for HLTV
 
 ### Settings
 
-Settings live in `hosting/.env.default`. Don't edit that file. Instead, create `hosting/.env` (gitignored) with only the lines you want to change. It overrides the defaults:
+Container settings live in `config/.env.default`. Don't edit that file. Instead, create `config/.env` (gitignored) with only the lines you want to change. It overrides the defaults, and a change only needs `podman compose up -d`, no rebuild:
 
 ```sh
 RCON_PASSWORD=change-me
@@ -80,9 +79,9 @@ HLDS_OPTS=+maxplayers 24 +map ns_eclipse +log on -pingboost 3 +sys_ticrate 1000
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `HLDS_PORT` | `27016` | Game port (UDP). Set it in `.env`, which compose also reads for the port mapping. |
+| `HLDS_PORT` | `27016` | Game port (UDP), also the host port. Compose reads the port mappings from `hosting/.env`, which `hosting/build.sh` writes from `config/.env*`, so after changing a port without a rebuild, run `hosting/build.sh env` (`./setup.sh` does it for you). |
 | `HLDS_OPTS` | `+maxplayers 32 +map ns_veil ...` | `hlds_linux` options. `-game ns` and `-port` are added automatically. |
-| `NS_GAMEDLL` | empty | Run another server binary from `ns/` in place of the built `dlls/ns.so`, for comparison, e.g. a release binary put in `hosting/overlay/dlls/` (the release zip's `ns/dlls/ns.so`, renamed). Don't use the repo's prebuilt `dlls/ns_i386.so`: it's an old beta build that rejects everyone but authorized testers. |
+| `NS_GAMEDLL` | empty | Run another server binary from `ns/` in place of the built `dlls/ns.so`, for comparison, e.g. a release binary put in `config/dlls/` (the release zip's `ns/dlls/ns.so`, renamed). Don't use the repo's prebuilt `dlls/ns_i386.so`: it's an old beta build that rejects everyone but authorized testers. |
 | `RCON_PASSWORD` | empty | RCON password, passed at start. Don't put it in `server.cfg`. |
 | `SV_PASSWORD` | empty | Join password. HLTV also uses it to connect. |
 | `HLTV_PORT` | `27020` | HLTV port (UDP). |
@@ -90,24 +89,28 @@ HLDS_OPTS=+maxplayers 24 +map ns_eclipse +log on -pingboost 3 +sys_ticrate 1000
 | `HLTV_DELAY` | `10` | Seconds HLTV waits for the server to start. |
 | `ROTATE_INTERVAL`, `ROTATE_AGE` | `300`, `30` | How often the rotate service runs (seconds), and how many minutes a file must be idle before it's compressed. |
 
-### Server config and MOTD
+### Configs (`config/`)
 
-The two files you'll change most often live directly in `hosting/`:
+Every config lives in `config/` at the repo root, laid out like the mod directory: `config/server.cfg` becomes `ns/server.cfg`, and `config/addons/amxmodx/configs/amxx.cfg` becomes `ns/addons/amxmodx/configs/amxx.cfg`. `config/README.md` lists every file.
 
-| File | Committed template | What it is |
-|------|--------------------|------------|
-| `hosting/server.cfg` | `server.cfg.example` | Server settings (hostname, `sv_region`, gameplay cvars). The server runs it on every map change. |
-| `hosting/motd.txt` | `motd.txt.example` | The message of the day shown to joining players. |
+- **Defaults** are the committed `*.example` files (and `.env.default`). Don't edit them.
+- **To change one**, copy it without `.example` and edit the copy, e.g. `cp config/server.cfg.example config/server.cfg`. Your copies are gitignored, so they stay local, and a copy always wins over its example. To go back to the default, delete your copy.
+- **Any other file** you put in `config/` (`mapcycle.txt`, `banned.cfg`, a custom `skill.cfg`, `dlls/<name>.so` for `NS_GAMEDLL`, ...) is copied into `ns/` as it is.
 
-They replace `ns/server.cfg` and `ns/motd.txt` from `dist/server/ns/` in the image. `dist/server/ns/` itself isn't changed, because `merge.sh` rebuilds it anyway. Both files are gitignored, so your edits stay local, while the `.example` files are committed copies of the stock `dist/ns/` versions.
+| In `config/` | What it is |
+|---|---|
+| `.env.default` → `.env` | Container settings and passwords (see [Settings](#settings)). Never copied into the image. |
+| `server.cfg.example` | Server cvars (hostname, `sv_region`, bots, gameplay). The server runs it on every map change. `./setup.sh` sets the hostname and bots in your copy. |
+| `motd.txt.example` | The message of the day shown to joining players. |
+| `addons/metamod/*.example` | Metamod-P's `config.ini` (the game DLL it loads) and `plugins.ini` (AMX Mod X). |
+| `addons/amxmodx/configs/plugins.ini.example` | Which AMX Mod X plugins load (see [Plugins: AMX Mod X](#plugins-amx-mod-x)). |
+| `addons/amxmodx/configs/*.example` | AMX Mod X 1.10's own configs (`amxx.cfg`, `users.ini` for admins, `maps.ini`, ...), and the custom plugins' settings from the old server (`extralevels3.cfg`, `toggle_random_nvault.cfg`, `mvm_configs/`, per-map plugin lists in `maps/`, ...). |
 
-1. Run `hosting/build.sh` once. It creates `server.cfg` and `motd.txt` from the `.example` files if they don't exist. You can also copy them yourself.
-2. Edit `hosting/server.cfg` and `hosting/motd.txt`.
-3. Rebuild and restart: `hosting/build.sh && cd hosting && podman compose up -d`. Only the small config layer is rebuilt.
+`hosting/build.sh` (the image step of `./setup.sh`) installs `config/` over the mod directory after the maps and plugins. Files under `addons/<name>/` only go in when the image has that plugin. When an example changes after you made your copy (after a `git pull`, say), the build prints a note so you can merge the change. `dist/server/ns/` itself isn't changed. Keep passwords out of `server.cfg`: set `RCON_PASSWORD` and `SV_PASSWORD` in `config/.env`.
 
-To start over from the stock files, delete your copy and run `build.sh` again. Keep passwords out of `server.cfg`: set `RCON_PASSWORD` and `SV_PASSWORD` in `hosting/.env`.
+Everything except `.env` is baked into the image, so after a change, run `hosting/build.sh && cd hosting && podman compose up -d`. Only the small config layers are rebuilt; `up -d` alone keeps the old image. Content you make and want to keep in git, like bot navmeshes, goes in `content/` instead (see [Server content](#server-content)). Don't add files to `dist/server/ns/` by hand: `mapmerge/merge.sh` recreates it on every run.
 
-Any other file for the mod directory (`mapcycle.txt`, `banned.cfg`, a custom `skill.cfg`, ...) goes in `hosting/overlay/`, at its path under `ns/`. It's copied over `ns/` before `server.cfg` and `motd.txt`. Content you make and want to keep in git, like bot navmeshes, goes in `content/` instead (see [Server content](#server-content)). Don't add files to `dist/server/ns/` by hand: `mapmerge/merge.sh` recreates it on every run. The image holds a copy of all these files, so after any change run `hosting/build.sh` and then `podman compose up -d`; `up -d` alone keeps the old image.
+Before `config/` existed, these files were `hosting/.env`, `hosting/server.cfg`, `hosting/motd.txt` and `hosting/overlay/`. `hosting/build.sh` and `./setup.sh` move them into `config/` once.
 
 ### Server content
 
@@ -119,11 +122,11 @@ mapmerge/merge.sh && hosting/build.sh && (cd hosting && podman compose up -d)
 
 The analysis is cached, so this only re-runs the quick assembly.
 
-**Live update, without a rebuild or restart:** `hosting/push-content.sh` copies `content/` into the running `hlds` container and runs `sv_botreloadnav` over RCON, so the bots reload the current map's navmesh right away. It needs `RCON_PASSWORD` in `hosting/.env`. The copy only lives in the running container, so run the merge and build commands above when you're done, or the next container restart loses it. Bots must be enabled (`mp_botsenabled 1`). If the current map started without a navmesh, `sv_botreloadnav` does nothing, so the script switches the bots off and on instead, which loads the new navmesh (there are no bots on such a map anyway). Other maps pick up their new navmesh when they load.
+**Live update, without a rebuild or restart:** `hosting/push-content.sh` copies `content/` into the running `hlds` container and runs `sv_botreloadnav` over RCON, so the bots reload the current map's navmesh right away. It needs `RCON_PASSWORD` in `config/.env`. The copy only lives in the running container, so run the merge and build commands above when you're done, or the next container restart loses it. Bots must be enabled (`mp_botsenabled 1`). If the current map started without a navmesh, `sv_botreloadnav` does nothing, so the script switches the bots off and on instead, which loads the new navmesh (there are no bots on such a map anyway). Other maps pick up their new navmesh when they load.
 
 For other console commands, use `podman exec ns-classic-hlds-1 ./rcon.sh <command>` (e.g. `status`, `changelevel ns_eclipse`). It runs inside the container with the container's own `RCON_PASSWORD`. Note that HLDS prints every RCON packet, password included, to its console.
 
-`content/` vs `hosting/overlay/`: `content/` is shared project content (committed); `overlay/` is for one server's local files (gitignored).
+`content/` vs `config/`: `content/` is shared project content (committed); your own files in `config/` are for one server (gitignored).
 
 NavEditor (`GoldsrcNavEditor.exe`) ships in `src/main/navmeshes/NavEditor/`. The build leaves it out of `dist/` (the server doesn't need it), so run it from there or from your own copy. Save the navmeshes you make into `content/navmeshes/`. The stock `mapcycle.txt` lists only the stock maps. Generated mapcycles for all maps are in `ns/` too (see [Mapcycles](#mapcycles)), and you can pick one with `+mapcyclefile mapcycle.ns.txt` in `HLDS_OPTS`.
 
@@ -159,14 +162,14 @@ PLUGINS=amxmodx hosting/build.sh          # bake it into the server image
 - **Source:** each repo is built at the latest commit of its default branch. `build.sh` looks those commits up with `git ls-remote`, so a rebuild picks up upstream changes, and an unchanged upstream reuses the cached build. Pin or fork with `AMXMODX_GIT_REF`/`AMXMODX_GIT_URL` and `METAMOD_GIT_REF`/`METAMOD_GIT_URL` (also `AMBUILD_`, `HLSDK_`, `METAMOD_HL1_`). The commits used are in `addons/amxmodx/ns-classic-sources.txt`.
 - **What's in it:** AMXX's base package with its NS package on top: NS configs, plugins (`nscommands`, `mapchooser`, `idlekicker`, ...) and the `ns` module. MySQL support isn't built, because its client libraries are a separate large download. SQLite works.
 - **How it loads:** when the image has `addons/metamod/dlls/metamod.so`, `hosting/Dockerfile` points both `gamedll` lines in `liblist.gam` at metamod. Metamod then loads `dlls/ns.so` (`addons/metamod/config.ini`). `NS_GAMEDLL` still works. Without `PLUGINS`, the image has no plugins and the stock `liblist.gam`.
-- **Admins and settings:** put your files in `hosting/overlay/addons/amxmodx/configs/` (for example `users.ini` with your Steam ID, `amxx.cfg`). They're copied over the plugin's defaults. `addons/amxmodx/scripting/amxxpc` compiles `.sma` files inside the container.
+- **Admins and settings:** all of Metamod's and AMXX's configs are in `config/addons/` (see [Configs](#configs-config)). Copy `config/addons/amxmodx/configs/users.ini.example` to `users.ini` and add your Steam ID; do the same with `amxx.cfg` for plugin cvars. Metamod's `config.ini` and `plugins.ini` aren't in the plugin build at all, so the image gets them from `config/` alone. `addons/amxmodx/scripting/amxxpc` compiles `.sma` files inside the container.
 - **Check it's running:** `podman exec ns-classic-hlds-1 ./rcon.sh meta list` and `./rcon.sh amxx plugins`.
 
-**Custom plugins:** `plugins/amxmodx/scripting/` holds the old server's plugin sources (`*.sma`, from its `addons/amxmodx/scripting`), and `scripting/include/` holds their includes that AMXX doesn't ship. `build.sh` compiles every `.sma` with the AMXX 1.10 compiler it just built. A script that doesn't compile is left out and doesn't fail the build: `build.sh` prints the count and the names, and the compiler errors are in `addons/amxmodx/scripting/ns-classic-compile.txt`. `plugins/amxmodx/prebuilt/*.amxx` are old plugins without source, installed as they are (so far `me_helper.amxx`, the `/help` menu that many of the plugins hook into). To add a plugin, drop its `.sma` in `scripting/` (or its `.amxx` in `prebuilt/`), list it in `plugins.ini`, and rebuild.
+**Custom plugins:** `plugins/amxmodx/scripting/` holds the old server's plugin sources (`*.sma`, from its `addons/amxmodx/scripting`), and `scripting/include/` holds their includes that AMXX doesn't ship. `build.sh` compiles every `.sma` with the AMXX 1.10 compiler it just built. A script that doesn't compile is left out and doesn't fail the build: `build.sh` prints the count and the names, and the compiler errors are in `addons/amxmodx/scripting/ns-classic-compile.txt`. `plugins/amxmodx/prebuilt/*.amxx` are old plugins without source, installed as they are (so far `me_helper.amxx`, the `/help` menu that many of the plugins hook into). To add a plugin, drop its `.sma` in `scripting/` (or its `.amxx` in `prebuilt/`), list it in the plugin list, and rebuild.
 
-- **Enable or disable a plugin** in `plugins/amxmodx/plugins.ini`, which becomes `configs/plugins.ini`: one `name.amxx` per line, with a leading `;` to disable it. It covers the stock plugins too, and it started as the old server's list, with the same plugins on and off. Plugins that weren't in the old list are at the end, disabled. An enabled plugin that didn't compile is commented out in the installed copy (`; [not built]`). For one server only, override it with `hosting/overlay/addons/amxmodx/configs/plugins.ini`. `amxx.cfg` is for plugin settings (cvars), not for which plugins load.
-- **Changes to the old sources**, so they build on Linux and 1.10: none to the scripts except a `native NSA_NS_General_Race_Won(id)` declaration in `gorge_race_helper.sma` and `marine_race_helper.sma`. The includes `helper.inc` and `stickychambers.inc` weren't in the backup and were rebuilt: `helper.inc` from how the old compiled plugins called the Helper, and `stickychambers.inc` from the natives that `stickychambers.sma` registers. Names in `plugins.ini` use the files' real case (Linux is case-sensitive: `XP4Buildings.amxx`). `saytocomm.sma` doesn't build: it needs `nsteam.inc`, which isn't in the backup.
-- **Tested** on HL25 with bots: 131 of the 132 scripts compile, and all 70 enabled plugins load with no missing natives or modules. The Helper finds the plugins that offer help. Some plugins pause or stop themselves outside their game mode (`NSA_*` until `nsa_type` is set to `ns`, `co` or `sg` in `amxx.cfg`, ExtraLevels 3 outside combat). Others log that a config file they read is missing (`badwords.ini`, `extralevels3.cfg`, `clan_tags.ini`, `icons.conf`, ...). Those are in the old server's `configs/`, which isn't imported.
+- **Enable or disable a plugin** in the plugin list, `config/addons/amxmodx/configs/plugins.ini.example`. It becomes `configs/plugins.ini` in the image: one `name.amxx` per line, with a leading `;` to disable it. It covers the stock plugins too, and it started as the old server's list, with the same plugins on and off. Plugins that weren't in the old list are at the end, disabled. For your server only, copy it to `plugins.ini` next to it and edit that copy. The old server's per-map lists (`configs/maps/plugins-<map>.ini`, e.g. the Combat plugins off on NS maps) are imported too. When the image is built, an entry whose `.amxx` doesn't exist (it didn't compile, or the plugin was removed) is commented out in all these lists (`; [not built]`, `hosting/scripts/plugin-lists.sh`), so AMXX doesn't log a load error every map. `amxx.cfg` is for plugin settings (cvars), not for which plugins load.
+- **Changes to the old sources**, so they build on Linux and 1.10: none to the scripts except a `native NSA_NS_General_Race_Won(id)` declaration in `gorge_race_helper.sma` and `marine_race_helper.sma`. That native comes from the NS Achievements plugins (`NSA_*`), which were removed, so the race helpers compile but won't load: keep them disabled. The includes `helper.inc` and `stickychambers.inc` weren't in the backup and were rebuilt: `helper.inc` from how the old compiled plugins called the Helper, and `stickychambers.inc` from the natives that `stickychambers.sma` registers. Names in `plugins.ini` use the files' real case (Linux is case-sensitive: `XP4Buildings.amxx`). `saytocomm.sma` doesn't build: it needs `nsteam.inc`, which isn't in the backup.
+- **Tested** on HL25 with bots: 96 of the 97 scripts compile, and all 44 enabled plugins load with no missing natives or modules. The Helper finds the plugins that offer help (`[Help] 7/44`). Some plugins stop themselves outside their game mode (ExtraLevels 3 and XP4Buildings outside combat, donateres outside siege). The old server's plugin configs are imported into `config/addons/amxmodx/configs/` (see [Configs](#configs-config)). With them, the per-map list on ns_eclipse turns 9 Combat plugins off there, so 35 load. Lists of players' Steam IDs (`stacksplit.ini`, `constant_names.ini`, `clan_night_attendants.ini`, `icons.conf`) aren't committed: they're local copies in `config/` only. `users.ini`, `sql.cfg` and `toggle_random.cfg` (database credentials) weren't imported.
 
 **The NS module, patched for this build:** upstream AMXX's `ns` module finds NS's internal data and functions at fixed offsets taken from NS 3.2's `ns_i386.so`. Our NS 3.3 `ns.so` (GCC 11) has a different layout, so natives like `ns_get_res` read the wrong memory and `ns_get_teamres` crashed the server. `plugins/amxmodx/patches/0001-ns-module-offsets-and-symbols-from-ns-so.patch` fixes that:
 - **Field offsets come from the build.** `builder/` compiles `builder/offsets/ns_offsets.cpp` with `ns.so`'s own compile line and writes `dist/ns/dlls/ns.so.offsets`: the GNU build ID of that `ns.so`, then one `Class::member offset` line per field. The module reads it at startup.
@@ -306,7 +309,7 @@ How a needed file is found: first at its path (e.g. `nsp/sprites/foo.spr` in an 
 
 ### Mapcycles
 
-`merge.sh` also writes mapcycle files into `dist/server/ns/`, so they're baked into the server image. Choose one with `+mapcyclefile <file>` in `HLDS_OPTS` (`hosting/.env`). Every entry uses `minplayers 0` and `maxplayers 32` (`[mapcycle]` in `rules.toml`).
+`merge.sh` also writes mapcycle files into `dist/server/ns/`, so they're baked into the server image. Choose one with `+mapcyclefile <file>` in `HLDS_OPTS` (`config/.env`). Every entry uses `minplayers 0` and `maxplayers 32` (`[mapcycle]` in `rules.toml`).
 
 | File | Maps |
 |---|---|

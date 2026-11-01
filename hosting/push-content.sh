@@ -10,7 +10,7 @@
 # on instead, which loads it. Bots must be enabled (mp_botsenabled 1). Other
 # maps pick up their new navmesh when they load.
 #
-# Needs RCON_PASSWORD in hosting/.env. Uses podman if available, otherwise
+# Needs RCON_PASSWORD in config/.env. Uses podman if available, otherwise
 # docker; override with CONTAINER_ENGINE, and the container with
 # HLDS_CONTAINER (default: ns-classic-hlds-1, from compose.yaml).
 set -euo pipefail

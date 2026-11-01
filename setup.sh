@@ -9,9 +9,9 @@
 #   ./setup.sh show     print the saved plan and the steps it would run
 #
 # The plan is plan.env (gitignored): KEY=value lines, choices only, never
-# secrets. Server settings go where the server reads them: port, players,
-# map, mapcycle and passwords in hosting/.env, hostname and bots in
-# hosting/server.cfg.
+# secrets. Server settings go in config/, with all the other configs (see
+# config/README.md): port, players, map, mapcycle and passwords in
+# config/.env, hostname and bots in config/server.cfg.
 #
 # Steps, in order (each one can be skipped by the plan):
 #   build   builder/build.sh     -> dist/ns
@@ -29,6 +29,7 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 plan_file="$repo/plan.env"
 hosting="$repo/hosting"
+config="$repo/config"
 image="localhost/ns-classic-server:latest"
 
 STEPS=(build maps amxmodx image start)
@@ -89,7 +90,7 @@ save_plan() {
   local key
   {
     echo "# ns-classic plan, written by ./setup.sh. Run it with: ./setup.sh run"
-    echo "# Choices only; passwords live in hosting/.env."
+    echo "# Choices only; passwords live in config/.env."
     for key in "${PLAN_KEYS[@]}"; do echo "$key=${PLAN[$key]}"; done
   } > "$plan_file"
   echo "Saved plan.env"
@@ -150,12 +151,12 @@ confirm() {
   [[ "$ans" == [yY]* ]]
 }
 
-# --- server settings (hosting/.env, hosting/server.cfg) ----------------------
+# --- server settings (config/.env, config/server.cfg) ----------------------
 
 # env_get KEY: the value compose will use (.env over .env.default)
 env_get() {
   local f line val=""
-  for f in "$hosting/.env.default" "$hosting/.env"; do
+  for f in "$config/.env.default" "$config/.env"; do
     [[ -f "$f" ]] || continue
     while IFS= read -r line || [[ -n "$line" ]]; do
       line="${line%$'\r'}"
@@ -165,11 +166,11 @@ env_get() {
   printf '%s' "$val"
 }
 
-# env_set KEY VALUE: replace KEY's line in hosting/.env, or append it.
+# env_set KEY VALUE: replace KEY's line in config/.env, or append it.
 # Nothing is written if compose would already see that value.
 env_set() {
   [[ "$(env_get "$1")" == "$2" ]] && return 0
-  local f="$hosting/.env" tmp
+  local f="$config/.env" tmp
   touch "$f"
   tmp="$(mktemp "$f.XXXXXX")"
   K="$1" V="$2" awk '
@@ -179,21 +180,21 @@ env_set() {
     { print }
     END { if (!done) print k ENVIRON["V"] }' "$f" > "$tmp"
   mv "$tmp" "$f"
-  CHANGED+=("hosting/.env: $1")
+  CHANGED+=("config/.env: $1")
 }
 
 cfg_file() {
-  local f="$hosting/server.cfg"
-  [[ -f "$f" ]] || cp "$hosting/server.cfg.example" "$f"
+  local f="$config/server.cfg"
+  [[ -f "$f" ]] || cp "$config/server.cfg.example" "$f"
   printf '%s' "$f"
 }
 
-# cfg_get NAME: a cvar's value in hosting/server.cfg, without quotes
+# cfg_get NAME: a cvar's value in config/server.cfg, without quotes
 cfg_get() {
   awk -v k="$1" '{ sub(/\r$/, "") } $1 == k { $1 = ""; v = $0 } END { sub(/^ +/, "", v); gsub(/"/, "", v); print v }' "$(cfg_file)"
 }
 
-# cfg_set NAME VALUE: replace the cvar's line in hosting/server.cfg, or append it
+# cfg_set NAME VALUE: replace the cvar's line in config/server.cfg, or append it
 cfg_set() {
   [[ "$(cfg_get "$1")" == "${2//\"/}" ]] && return 0
   local f tmp
@@ -206,7 +207,7 @@ cfg_set() {
     { print }
     END { if (!done) print k " " ENVIRON["V"] }' "$f" > "$tmp"
   mv "$tmp" "$f"
-  CHANGED+=("hosting/server.cfg: $1")
+  CHANGED+=("config/server.cfg: $1")
 }
 
 # opt_get NAME OPTS: the value of +NAME in an HLDS_OPTS string
@@ -242,7 +243,7 @@ password() {
     case "$ans" in
       "") return ;;
       -) env_set "$1" ""; return ;;
-      *[[:space:]\"\'#]*) echo "  No spaces, quotes or #, please (hosting/.env can't hold them)." ;;
+      *[[:space:]\"\'#]*) echo "  No spaces, quotes or #, please (config/.env can't hold them)." ;;
       *) env_set "$1" "$ans"; return ;;
     esac
   done
@@ -252,7 +253,7 @@ settings_wizard() {
   local opts cycle size note f
   local -a args
   echo
-  echo "${B}Server settings${R} ${D}(written to hosting/.env and hosting/server.cfg)${R}"
+  echo "${B}Server settings${R} ${D}(written to config/.env and config/server.cfg)${R}"
 
   ask "Server name" "$(cfg_get hostname)" '^[^"]+$' "No double quotes, please."
   cfg_set hostname "\"$REPLY\""
@@ -289,7 +290,7 @@ settings_wizard() {
   cfg_set mp_botsenabled "$([[ "$REPLY" == on ]] && echo 1 || echo 0)"
 
   echo
-  echo "${B}Passwords${R} ${D}(hosting/.env only, never plan.env)${R}"
+  echo "${B}Passwords${R} ${D}(config/.env only, never plan.env)${R}"
   password RCON_PASSWORD "RCON password"
   password SV_PASSWORD "Join password"
   [[ -n "$(env_get RCON_PASSWORD)" ]] ||
@@ -340,7 +341,7 @@ wizard() {
 
   echo
   local def=n
-  [[ -f "$hosting/.env" ]] || def=y
+  [[ -f "$config/.env" ]] || def=y
   if confirm "${B}Change server settings${R} (name, port, players, map, mapcycle, bots, passwords)?" "$def"; then
     settings_wizard
   fi
@@ -483,6 +484,8 @@ run_plan() {
     echo
     echo "${B}==> $n. $TITLE${R}"
     echo "${D}    ${CMD[*]}${R}"
+    # The port mappings, in case config/.env changed since the image step
+    if [[ "$step" == start ]]; then "$hosting/build.sh" env; fi
     start=$SECONDS
     if ! (cd "$DIR" && env "${ENVS[@]}" "${CMD[@]}"); then
       die "step '$step' failed (fix it, then re-run: ./setup.sh run)"
@@ -506,6 +509,8 @@ run_plan() {
   fi
 }
 
+# Moves configs from their pre-config/ places (once) and writes hosting/.env
+"$hosting/build.sh" env
 load_plan
 case "${1:-}" in
   "")

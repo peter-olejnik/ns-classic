@@ -10,7 +10,7 @@
 set -euo pipefail
 
 [[ $# -gt 0 ]] || { echo "usage: rcon.sh <command> [args...]" >&2; exit 2; }
-[[ -n "${RCON_PASSWORD:-}" ]] || { echo "error: RCON_PASSWORD is not set (hosting/.env)" >&2; exit 1; }
+[[ -n "${RCON_PASSWORD:-}" ]] || { echo "error: RCON_PASSWORD is not set (config/.env)" >&2; exit 1; }
 
 exec 3<>"/dev/udp/127.0.0.1/${HLDS_PORT:-27016}"
 

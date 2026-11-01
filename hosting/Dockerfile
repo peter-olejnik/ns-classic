@@ -4,9 +4,11 @@
 # hosting/build.sh passes the mod directory as the named build context "ns":
 #
 #   podman build -f hosting/Dockerfile -t localhost/ns-classic-server \
-#     --build-context ns=dist/server/ns --build-context plugins=<dir> hosting
+#     --build-context ns=dist/server/ns --build-context plugins=<dir> \
+#     --build-context config=<dir> hosting
 #
-# and the plugins (e.g. AMX Mod X, plugins/amxmodx/) as "plugins".
+# the plugins (e.g. AMX Mod X, plugins/amxmodx/) as "plugins", and the
+# configs from config/ as "config".
 #
 # The container's command picks its role: hlds (default), hltv or rotate.
 # See scripts/entry.sh.
@@ -97,10 +99,12 @@ RUN if [ -f ns/addons/metamod/dlls/metamod.so ]; then \
       if LD_LIBRARY_PATH=. ldd "$f" | grep 'not found'; then echo "$f: missing libraries" >&2; exit 1; fi; \
     done
 
-# Your own configs, copied over the mod directory: anything in overlay/, then
-# server.cfg and motd.txt (build.sh creates them from the *.example files)
-COPY --chown=steam:steam overlay/ ns/
-COPY --chown=steam:steam server.cfg motd.txt ns/
+# The configs (config/ at the repo root, resolved by build.sh: your files,
+# else the *.example defaults), copied over the mod directory. Then AMXX's
+# plugin lists lose entries whose .amxx wasn't built.
+COPY --from=config --chown=steam:steam . ns/
+COPY --chown=steam:steam --chmod=755 scripts/plugin-lists.sh /tmp/
+RUN /tmp/plugin-lists.sh ns/addons/amxmodx && rm /tmp/plugin-lists.sh
 COPY --chown=steam:steam --chmod=755 scripts/entry.sh scripts/rotate.sh scripts/rcon.sh ./
 COPY --from=hltvfix /hltv_demofix.so ./
 

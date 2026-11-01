@@ -7,6 +7,7 @@ ns_maps
 mapmerge
 plugins
 content
+config
 _tmp
 builder/*
 !builder/patches

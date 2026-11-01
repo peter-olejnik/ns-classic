@@ -7,7 +7,7 @@
 #
 # Anything else is run as a command, e.g. `bash`. Extra arguments after hlds
 # or hltv are appended to the command line. Settings come from the
-# environment (hosting/.env.default, overridden by hosting/.env).
+# environment (config/.env.default, overridden by config/.env).
 set -euo pipefail
 
 cd /home/steam/hlds
@@ -19,7 +19,7 @@ role="${1:-hlds}"
 case "$role" in
   hlds)
     # Run another server binary than the built dlls/ns.so for comparison, e.g.
-    # a release ns.so added as overlay/dlls/ns_v33b9.so. The engine derives the
+    # a release ns.so added as config/dlls/ns_v33b9.so. The engine derives the
     # library from liblist.gam's gamedll (dlls\ns.dll -> dlls/ns.so) and ignores
     # gamedll_linux, so the chosen binary is put in place as dlls/ns.so. This
     # only changes the container; the built one is kept as dlls/ns.so.built.
